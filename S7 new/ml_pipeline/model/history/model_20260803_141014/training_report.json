@@ -1,0 +1,45 @@
+{
+  "accuracy": 0.5102040816326531,
+  "confusion_matrix": [
+    [
+      14,
+      3,
+      0
+    ],
+    [
+      15,
+      2,
+      6
+    ],
+    [
+      0,
+      0,
+      9
+    ]
+  ],
+  "per_class": {
+    "Normal": {
+      "precision": 0.4828,
+      "recall": 0.8235,
+      "f1": 0.6087,
+      "support": 17
+    },
+    "Moderate": {
+      "precision": 0.4,
+      "recall": 0.087,
+      "f1": 0.1429,
+      "support": 23
+    },
+    "High": {
+      "precision": 0.6,
+      "recall": 1.0,
+      "f1": 0.75,
+      "support": 9
+    }
+  },
+  "train_samples": 180,
+  "test_samples": 49,
+  "total_samples": 229,
+  "total_subjects": 29,
+  "epochs_run": 20
+}

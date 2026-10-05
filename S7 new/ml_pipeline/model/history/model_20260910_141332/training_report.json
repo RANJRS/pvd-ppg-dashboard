@@ -1,0 +1,60 @@
+{
+  "accuracy": 1.0,
+  "confusion_matrix": [
+    [
+      22,
+      0,
+      0
+    ],
+    [
+      0,
+      17,
+      0
+    ],
+    [
+      0,
+      0,
+      10
+    ]
+  ],
+  "per_class": {
+    "Normal": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 22
+    },
+    "Moderate": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 17
+    },
+    "High": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 10
+    }
+  },
+  "train_samples": 149,
+  "test_samples": 49,
+  "total_samples": 198,
+  "total_subjects": 26,
+  "epochs_run": 100,
+  "feature_cols": [
+    "PI_finger",
+    "PI_toe",
+    "PI_ratio",
+    "PTT_ft",
+    "AI_finger",
+    "AI_toe",
+    "HRV_rmssd",
+    "dicrotic_ratio",
+    "temp_finger",
+    "temp_toe",
+    "temp_diff",
+    "accel_std",
+    "gyro_std"
+  ]
+}

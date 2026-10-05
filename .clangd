@@ -1,0 +1,7 @@
+# Clangd configuration to resolve include paths for the IDE linter
+CompileFlags:
+  CompilationDatabase: ppg_pvd_patch/firmware
+  Add:
+    - -Ippg_pvd_patch/firmware/include
+    - -Ippg_pvd_patch/firmware/src
+    - --query-driver=**

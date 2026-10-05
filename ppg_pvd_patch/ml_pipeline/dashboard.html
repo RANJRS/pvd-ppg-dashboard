@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PVD PPG Risk Classifier - ML Dashboard</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="dashboard.css">
+    <!-- Theme state initialization to prevent styling flash -->
+    <script>
+        const savedTheme = localStorage.getItem("theme") || "dark";
+        document.documentElement.setAttribute("data-theme", savedTheme);
+    </script>
+    <!-- Dashboard Logic -->
+    <script src="dashboard.js" defer></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-icon"></div>
+                <div class="logo-text">
+                    <h1>PVD PPG</h1>
+                    <span>Classifier Pipeline</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <button class="nav-item active" id="nav-overview" onclick="switchTab('overview')">
+                    <span class="nav-icon">📊</span> Overview
+                </button>
+                <button class="nav-item" id="nav-waveforms" onclick="switchTab('waveforms')">
+                    <span class="nav-icon">📈</span> PPG Waveforms
+                </button>
+                <button class="nav-item" id="nav-features" onclick="switchTab('features')">
+                    <span class="nav-icon">🔬</span> Feature Explorer
+                </button>
+                <button class="nav-item" id="nav-model" onclick="switchTab('model')">
+                    <span class="nav-icon">🧠</span> Model Performance
+                </button>
+                <button class="nav-item" id="nav-pipeline" onclick="switchTab('pipeline')">
+                    <span class="nav-icon">⚙️</span> Pipeline Manager
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="pipeline-status">
+                    <div class="status-indicator online"></div>
+                    <span class="status-text">Pipeline Connected</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="content-header">
+                <div class="header-title">
+                    <h2 id="page-title">Dashboard Overview</h2>
+                    <p id="page-subtitle">Summary metrics and dataset distributions</p>
+                </div>
+                <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
+                    <button class="btn btn-secondary" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Light/Dark Theme" style="padding: 10px 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; border-radius: 8px;">☀️</button>
+                    <button class="btn btn-primary" onclick="reloadData()">🔄 Reload Data</button>
+                </div>
+            </header>
+
+            <!-- Tab: Overview -->
+            <section id="tab-content-overview" class="tab-content active">
+                <!-- Quick Pipeline Actions Bar -->
+                <div class="card glass-card pipeline-quick-actions" style="margin-bottom: 24px; padding: 16px 24px;">
+                    <div class="flex-between" style="align-items: center; flex-wrap: wrap; gap: 16px;">
+                        <div>
+                            <h4 style="font-family: var(--font-heading); font-size: 1.05rem; font-weight: 700; margin-bottom: 4px;">⚡ Quick Pipeline Control</h4>
+                            <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0;">Trigger data generation, preprocessing, and training directly from the home page.</p>
+                        </div>
+                        <div class="pipeline-btn-group flex-center" style="gap: 10px;">
+                            <button class="btn btn-secondary" id="home-btn-quick-synthetic" onclick="runPipelineStepHome('generate_synthetic')">📊 Generate Synthetic Data</button>
+                            <button class="btn btn-primary" id="home-btn-quick-train" onclick="runPipelineStepHome('process_and_train')">⚙️ Extract Features & Train</button>
+                            <button class="btn btn-primary" id="home-btn-run-all" onclick="runPipelineStepHome('all')">⚡ Run Full Pipeline</button>
+                            <button class="btn btn-step-stop" id="home-btn-stop" onclick="stopPipelineStep()" style="display: none; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🛑 Stop Running Pipeline</button>
+                            <button class="btn btn-secondary" id="home-btn-download-raw" onclick="downloadRawDataset()" style="background-color: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4);">📥 Download Raw Data (ZIP)</button>
+                            <button class="btn btn-secondary" id="home-btn-download-features" onclick="downloadFeaturesDataset()" style="background-color: var(--color-violet-glow); color: var(--color-violet); border-color: rgba(139, 92, 246, 0.4);">📥 Download Features (CSV)</button>
+                            <button class="btn btn-secondary" id="home-btn-clear" onclick="clearPipelineDataHome()" style="background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🗑️ Clear Synthetic Data</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Dataset Upload Card (Overview) -->
+                <div class="card glass-card full-width-card margin-bottom-lg" style="margin-top: 24px;">
+                    <div class="card-header flex-between">
+                        <h3>📂 Upload Custom Dataset</h3>
+                    </div>
+                    <div class="card-body" style="display: flex; gap: 24px; flex-wrap: wrap;">
+                        <div class="upload-dropzone" id="upload-dropzone-overview" style="flex: 1; min-width: 300px; border: 2px dashed rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; background: rgba(255,255,255,0.01); transition: var(--transition-smooth); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+                            <div class="upload-icon" style="font-size: 2.5rem;">📤</div>
+                            <div>
+                                <p style="font-weight: 600; font-family: var(--font-heading); font-size: 1rem; margin-bottom: 4px;">Drag & Drop files here or click to browse</p>
+                                <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0;">Supports multiple CSVs or a single ZIP containing them</p>
+                            </div>
+                            <input type="file" id="dataset-file-input-overview" multiple accept=".csv,.zip" style="display: none;">
+                        </div>
+                        <div class="upload-options-list" style="width: 320px; display: flex; flex-direction: column; gap: 16px; border-left: 1px solid var(--border-color); padding-left: 24px;">
+                            <h4 style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700;">Upload Settings</h4>
+                            <label class="checkbox-container" style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; cursor: pointer;">
+                                <input type="checkbox" id="upload-clear-checkbox-overview" checked style="accent-color: var(--color-violet);">
+                                <span>Clear existing raw data before upload</span>
+                            </label>
+                            
+                            <div id="selected-files-summary-overview" style="display: none; flex-direction: column; gap: 8px; flex-grow: 1;">
+                                <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Selected Files:</div>
+                                <div id="selected-files-list-overview" style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 6px; padding: 8px; font-family: monospace; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-color);">
+                                </div>
+                            </div>
+                            
+                            <button class="btn btn-primary" id="btn-upload-dataset-overview" onclick="uploadDataset('overview')" disabled style="width: 100%; display: flex; justify-content: center; align-items: center;">📤 Upload Dataset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon bg-violet">👥</div>
+                        <div class="stat-details">
+                            <h3 id="stat-subjects">--</h3>
+                            <p>Total Subjects</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon bg-cyan">🪟</div>
+                        <div class="stat-details">
+                            <h3 id="stat-windows">--</h3>
+                            <p>Segment Windows</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon bg-emerald">✅</div>
+                        <div class="stat-details">
+                            <h3 id="stat-normal">--</h3>
+                            <p>Normal Cases</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon bg-amber">⚠️</div>
+                        <div class="stat-details">
+                            <h3 id="stat-moderate-high">--</h3>
+                            <p>Moderate / High Cases</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <!-- Class Distribution Card -->
+                    <div class="card glass-card">
+                        <div class="card-header">
+                            <h3>Class Distribution</h3>
+                        </div>
+                        <div class="card-body chart-container flex-center">
+                            <canvas id="class-dist-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Dataset Description Card -->
+                    <div class="card glass-card">
+                        <div class="card-header">
+                            <h3>Data Pipeline Specifications</h3>
+                        </div>
+                        <div class="card-body info-list-body">
+                            <ul class="info-list">
+                                <li>
+                                    <span class="info-label">Sample Rate:</span>
+                                    <span class="info-value" id="spec-sample-rate">--</span>
+                                </li>
+                                <li>
+                                    <span class="info-label">Bandpass Filter:</span>
+                                    <span class="info-value" id="spec-bandpass">--</span>
+                                </li>
+                                <li>
+                                    <span class="info-label">Window Length:</span>
+                                    <span class="info-value" id="spec-window">--</span>
+                                </li>
+                                <li>
+                                    <span class="info-label">Step / Overlap:</span>
+                                    <span class="info-value" id="spec-step">--</span>
+                                </li>
+                                <li>
+                                    <span class="info-label">Target Architecture:</span>
+                                    <span class="info-value" id="spec-arch">--</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Waveforms -->
+            <section id="tab-content-waveforms" class="tab-content">
+                <div class="filter-bar">
+                    <div class="filter-group">
+                        <label for="select-subject">Subject ID:</label>
+                        <select id="select-subject" onchange="onSubjectChange()">
+                            <option value="">Loading...</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="select-window">Window Segment:</label>
+                        <select id="select-window" onchange="onWindowChange()">
+                            <option value="">Loading...</option>
+                        </select>
+                    </div>
+                    <div class="subject-info-badge" id="subject-label-badge">
+                        Label: --
+                    </div>
+                </div>
+
+                <div class="card glass-card full-width-card">
+                    <div class="card-header flex-between">
+                        <h3>PPG Pulse-Waveform Visualizer</h3>
+                        <div class="chart-legend">
+                            <span class="legend-dot color-finger"></span> Finger PPG
+                            <span class="legend-dot color-toe"></span> Toe PPG
+                        </div>
+                    </div>
+                    <div class="card-body ppg-chart-container">
+                        <canvas id="ppg-waveform-chart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Features -->
+            <section id="tab-content-features" class="tab-content">
+                <div class="card glass-card full-width-card margin-bottom-lg">
+                    <div class="card-header">
+                        <h3>Extracted Feature Vectors</h3>
+                    </div>
+                    <div class="card-body table-container">
+                        <div class="table-actions">
+                            <input type="text" id="table-search" placeholder="🔍 Search by Subject ID or Label..." oninput="onSearchTable()">
+                            <span id="table-search-count" class="table-search-count"></span>
+                        </div>
+                        <table class="data-table" id="features-table">
+                            <thead>
+                                <tr>
+                                    <th>Subject ID</th>
+                                    <th>PI</th>
+                                    <th>AI</th>
+                                    <th>HRV RMSSD</th>
+                                    <th>Dicrotic Ratio</th>
+                                    <th>Heart Rate (bpm)</th>
+                                    <th>Crest Factor</th>
+                                    <th>Skewness</th>
+                                    <th>Kurtosis</th>
+                                    <th>Label</th>
+                                </tr>
+                            </thead>
+                            <tbody id="features-table-body">
+                                <tr>
+                                    <td colspan="10" class="text-center">Loading feature data...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Model Performance -->
+            <section id="tab-content-model" class="tab-content">
+                <div class="dashboard-grid">
+                    <!-- Confusion Matrix Card -->
+                    <div class="card glass-card">
+                        <div class="card-header">
+                            <h3>Confusion Matrix (Held-out Evaluation)</h3>
+                        </div>
+                        <div class="card-body flex-column flex-center">
+                            <div class="matrix-container" id="confusion-matrix">
+                                <div class="matrix-grid">
+                                    <div class="matrix-cell label-cell"></div>
+                                    <div class="matrix-cell header-cell">Normal</div>
+                                    <div class="matrix-cell header-cell">Moderate</div>
+                                    <div class="matrix-cell header-cell">High</div>
+
+                                    <div class="matrix-cell header-cell row-header">Normal</div>
+                                    <div class="matrix-cell value-cell match" id="cm-0-0">0</div>
+                                    <div class="matrix-cell value-cell mismatch" id="cm-0-1">0</div>
+                                    <div class="matrix-cell value-cell mismatch" id="cm-0-2">0</div>
+
+                                    <div class="matrix-cell header-cell row-header">Moderate</div>
+                                    <div class="matrix-cell value-cell mismatch" id="cm-1-0">0</div>
+                                    <div class="matrix-cell value-cell match" id="cm-1-1">0</div>
+                                    <div class="matrix-cell value-cell mismatch" id="cm-1-2">0</div>
+
+                                    <div class="matrix-cell header-cell row-header">High</div>
+                                    <div class="matrix-cell value-cell mismatch" id="cm-2-0">0</div>
+                                    <div class="matrix-cell value-cell mismatch" id="cm-2-1">0</div>
+                                    <div class="matrix-cell value-cell match" id="cm-2-2">0</div>
+                                </div>
+                                <div class="matrix-axis-labels">
+                                    <div class="axis-y-label">Actual Classes</div>
+                                    <div class="axis-x-label">Predicted Classes</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scaler Parameters Card -->
+                    <div class="card glass-card">
+                        <div class="card-header">
+                            <h3>Normalization Standard Scaler Stats</h3>
+                        </div>
+                        <div class="card-body table-container">
+                            <table class="data-table compact">
+                                <thead>
+                                    <tr>
+                                        <th>Feature</th>
+                                        <th>Mean</th>
+                                        <th>Scale (Std)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="scaler-stats-body">
+                                    <tr>
+                                        <td colspan="3" class="text-center">Loading parameters...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Pipeline Manager -->
+            <section id="tab-content-pipeline" class="tab-content">
+                <div class="pipeline-header-bar flex-between margin-bottom-lg">
+                    <div class="pipeline-title-group">
+                        <h3>End-to-End Pipeline Execution</h3>
+                        <p>Trigger steps sequentially or run the full model lifecycle at once.</p>
+                    </div>
+                    <div class="pipeline-btn-group">
+                        <button class="btn btn-secondary" id="btn-quick-synthetic" onclick="runPipelineStep('generate_synthetic')">📊 Generate Synthetic Data</button>
+                        <button class="btn btn-primary" id="btn-quick-train" onclick="runPipelineStep('process_and_train')">⚙️ Extract Features & Train</button>
+                        <button class="btn btn-primary" id="btn-run-all" onclick="runPipelineStep('all')">⚡ Run Full Pipeline</button>
+                        <button class="btn btn-step-stop" id="btn-stop-all" onclick="stopPipelineStep()" style="display: none; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🛑 Stop Running Pipeline</button>
+                        <button class="btn btn-secondary" id="btn-download-raw" onclick="downloadRawDataset()" style="background-color: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4);">📥 Download Raw (ZIP)</button>
+                        <button class="btn btn-secondary" id="btn-download-features" onclick="downloadFeaturesDataset()" style="background-color: var(--color-violet-glow); color: var(--color-violet); border-color: rgba(139, 92, 246, 0.4);">📥 Download Features (CSV)</button>
+                        <button class="btn btn-secondary" id="btn-clear-pipeline" onclick="clearPipelineData()" style="background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🗑️ Clear Synthetic Data</button>
+                    </div>
+                </div>
+
+                <!-- Custom Dataset Upload Card -->
+                <div class="card glass-card full-width-card margin-bottom-lg">
+                    <div class="card-header flex-between">
+                        <h3>📂 Upload Custom Dataset</h3>
+                    </div>
+                    <div class="card-body" style="display: flex; gap: 24px; flex-wrap: wrap;">
+                        <div class="upload-dropzone" id="upload-dropzone-pipeline" style="flex: 1; min-width: 300px; border: 2px dashed rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; background: rgba(255,255,255,0.01); transition: var(--transition-smooth); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+                            <div class="upload-icon" style="font-size: 2.5rem;">📤</div>
+                            <div>
+                                <p style="font-weight: 600; font-family: var(--font-heading); font-size: 1rem; margin-bottom: 4px;">Drag & Drop files here or click to browse</p>
+                                <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0;">Supports multiple CSVs or a single ZIP containing them</p>
+                            </div>
+                            <input type="file" id="dataset-file-input-pipeline" multiple accept=".csv,.zip" style="display: none;">
+                        </div>
+                        <div class="upload-options-list" style="width: 320px; display: flex; flex-direction: column; gap: 16px; border-left: 1px solid var(--border-color); padding-left: 24px;">
+                            <h4 style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700;">Upload Settings</h4>
+                            <label class="checkbox-container" style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; cursor: pointer;">
+                                <input type="checkbox" id="upload-clear-checkbox-pipeline" checked style="accent-color: var(--color-violet);">
+                                <span>Clear existing raw data before upload</span>
+                            </label>
+                            
+                            <div id="selected-files-summary-pipeline" style="display: none; flex-direction: column; gap: 8px; flex-grow: 1;">
+                                <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Selected Files:</div>
+                                <div id="selected-files-list-pipeline" style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 6px; padding: 8px; font-family: monospace; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-color);">
+                                </div>
+                            </div>
+                            
+                            <button class="btn btn-primary" id="btn-upload-dataset-pipeline" onclick="uploadDataset('pipeline')" disabled style="width: 100%; display: flex; justify-content: center; align-items: center;">📤 Upload Dataset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pipeline-grid">
+                    <!-- Steps Control list -->
+                    <div class="card glass-card pipeline-steps-card">
+                        <div class="card-header">
+                            <h3>ML Pipeline Steps</h3>
+                        </div>
+                        <div class="card-body steps-list-container">
+                            <div class="pipeline-step-item" id="step-item-0">
+                                <div class="step-num">1</div>
+                                <div class="step-details">
+                                    <h4>Generate Synthetic Data</h4>
+                                    <code class="clickable-code" onclick="viewCodeFile('generate_synthetic_data.py')" title="Click to view code">generate_synthetic_data.py</code>
+                                    <p>Generates mock dual-site PPG CSV inputs under data/raw/.</p>
+                                </div>
+                                <div class="step-actions">
+                                    <span class="pipeline-badge badge-idle" id="badge-step-0">Idle</span>
+                                    <button class="btn btn-step-run" id="btn-run-0" onclick="runPipelineStep('generate_synthetic')">Run</button>
+                                    <button class="btn btn-step-stop" id="btn-stop-0" onclick="stopPipelineStep()" style="display: none;">Stop</button>
+                                </div>
+                            </div>
+
+                            <div class="pipeline-step-item" id="step-item-1">
+                                <div class="step-num">2</div>
+                                <div class="step-details">
+                                    <h4>Preprocess & Segment</h4>
+                                    <code class="clickable-code" onclick="viewCodeFile('data_preprocessing.py')" title="Click to view code">data_preprocessing.py</code>
+                                    <p>Filters PPG waveforms and segments them into 8s overlapping windows.</p>
+                                </div>
+                                <div class="step-actions">
+                                    <span class="pipeline-badge badge-idle" id="badge-step-1">Idle</span>
+                                    <button class="btn btn-step-run" id="btn-run-1" onclick="runPipelineStep('preprocess')">Run</button>
+                                    <button class="btn btn-step-stop" id="btn-stop-1" onclick="stopPipelineStep()" style="display: none;">Stop</button>
+                                </div>
+                            </div>
+
+                            <div class="pipeline-step-item" id="step-item-2">
+                                <div class="step-num">3</div>
+                                <div class="step-details">
+                                    <h4>Extract Waveform Features</h4>
+                                    <code class="clickable-code" onclick="viewCodeFile('feature_extraction.py')" title="Click to view code">feature_extraction.py</code>
+                                    <p>Derives the 8-feature vectors (PI, HRV, PTT, AI, etc.) per window segment.</p>
+                                </div>
+                                <div class="step-actions">
+                                    <span class="pipeline-badge badge-idle" id="badge-step-2">Idle</span>
+                                    <button class="btn btn-step-run" id="btn-run-2" onclick="runPipelineStep('extract_features')">Run</button>
+                                    <button class="btn btn-step-stop" id="btn-stop-2" onclick="stopPipelineStep()" style="display: none;">Stop</button>
+                                </div>
+                            </div>
+
+                            <div class="pipeline-step-item" id="step-item-3">
+                                <div class="step-num">4</div>
+                                <div class="step-details">
+                                    <h4>Train Classifier Model</h4>
+                                    <code class="clickable-code" onclick="viewCodeFile('train_model.py')" title="Click to view code">train_model.py</code>
+                                    <p>Trains standard scaler and sequential MLP model in Keras/TensorFlow.</p>
+                                </div>
+                                <div class="step-actions">
+                                    <span class="pipeline-badge badge-idle" id="badge-step-3">Idle</span>
+                                    <button class="btn btn-step-run" id="btn-run-3" onclick="runPipelineStep('train_model')">Run</button>
+                                    <button class="btn btn-step-stop" id="btn-stop-3" onclick="stopPipelineStep()" style="display: none;">Stop</button>
+                                </div>
+                            </div>
+
+                            <div class="pipeline-step-item" id="step-item-4">
+                                <div class="step-num">5</div>
+                                <div class="step-details">
+                                    <h4>Quantize & Export TFLite</h4>
+                                    <code class="clickable-code" onclick="viewCodeFile('convert_to_tflite.py')" title="Click to view code">convert_to_tflite.py</code>
+                                    <p>Performs full integer quantization and generates firmware model_data.h header.</p>
+                                </div>
+                                <div class="step-actions">
+                                    <span class="pipeline-badge badge-idle" id="badge-step-4">Idle</span>
+                                    <button class="btn btn-step-run" id="btn-run-4" onclick="runPipelineStep('convert_tflite')">Run</button>
+                                    <button class="btn btn-step-stop" id="btn-stop-4" onclick="stopPipelineStep()" style="display: none;">Stop</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Monospace Live Logger -->
+                    <div class="card glass-card pipeline-console-card">
+                        <div class="card-header flex-between">
+                            <h3>Live Console Logs</h3>
+                            <div class="console-actions">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="console-autoscroll" checked>
+                                    <span>Auto-Scroll</span>
+                                </label>
+                                <button class="btn btn-compact" onclick="clearConsole()">Clear</button>
+                            </div>
+                        </div>
+                        <div class="card-body console-body-container">
+                            <pre class="terminal-body" id="pipeline-terminal">> Console loaded. Ready to run scripts...</pre>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Code Viewer Modal -->
+    <div id="code-viewer-modal" class="modal-overlay" onclick="closeCodeModal(event)">
+        <div class="modal-content glass-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="code-modal-title">File Source Code</h3>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <button class="btn btn-compact" id="btn-copy-code" onclick="copyModalCode()">📋 Copy Code</button>
+                    <button class="modal-close-btn" onclick="closeCodeModal()">×</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <pre><code id="code-modal-body">Loading...</code></pre>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
