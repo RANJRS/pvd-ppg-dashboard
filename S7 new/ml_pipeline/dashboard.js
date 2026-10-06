@@ -567,15 +567,6 @@ function onWindowChange() {
                     pointRadius: 0,
                     tension: 0.2,
                     yAxisID: 'y'
-                },
-                {
-                    label: 'Toe PPG (Filtered)',
-                    data: win.filtered_toe,
-                    borderColor: cyanColor,
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    tension: 0.2,
-                    yAxisID: 'y'
                 }
             ]
         },
@@ -1181,15 +1172,6 @@ function initEsp32LiveChart() {
                     pointRadius: 0,
                     tension: 0.2,
                     yAxisID: 'y'
-                },
-                {
-                    label: 'Toe PPG (Live)',
-                    data: liveChartDataToe,
-                    borderColor: cyanColor,
-                    borderWidth: 2.5,
-                    pointRadius: 0,
-                    tension: 0.2,
-                    yAxisID: 'y'
                 }
             ]
         },
@@ -1532,11 +1514,11 @@ function parseSerialLine(line) {
     
     if (line.startsWith("DATA,")) {
         const parts = line.split(",");
-        if (parts.length >= 4) {
+        if (parts.length >= 3) {
             const ts     = parseInt(parts[1]);
             const finger = parseFloat(parts[2]);
-            const toe    = parseFloat(parts[3]);
-            if (!isNaN(ts) && !isNaN(finger) && !isNaN(toe)) {
+            const toe    = parts.length >= 4 ? parseFloat(parts[3]) : finger;
+            if (!isNaN(ts) && !isNaN(finger)) {
                 handleIncomingSample(ts, finger, toe);
             }
         }
@@ -1646,15 +1628,12 @@ function updateLiveChart(timestampMs, fingerVal, toeVal) {
     
     esp32LiveChart.data.labels = relativeTimes;
     esp32LiveChart.data.datasets[0].data = liveChartDataFinger;
-    esp32LiveChart.data.datasets[1].data = liveChartDataToe;
     
     // Dynamic autoscaling
     if (liveChartDataFinger.length > 50) {
         const fingerSlice = liveChartDataFinger.filter(v => v !== null);
-        const toeSlice = liveChartDataToe.filter(v => v !== null);
-        const allVals = [...fingerSlice, ...toeSlice];
-        const minVal = Math.min(...allVals);
-        const maxVal = Math.max(...allVals);
+        const minVal = Math.min(...fingerSlice);
+        const maxVal = Math.max(...fingerSlice);
         const pad = (maxVal - minVal) * 0.1 || 10;
         esp32LiveChart.options.scales.y.min = Math.floor(minVal - pad);
         esp32LiveChart.options.scales.y.max = Math.ceil(maxVal + pad);
