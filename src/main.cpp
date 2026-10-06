@@ -78,11 +78,25 @@ void initBLE() {
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(true);
-  pAdvertising->setMinPreferred(0x06);
-  pAdvertising->setMinPreferred(0x12);
+  pAdvertising->setMinPreferred(0x06); // 7.5 ms connection interval
+  pAdvertising->setMaxPreferred(0x10); // 20 ms connection interval
   BLEDevice::startAdvertising();
 
-  Serial.println("[BLE] Advertising started. Ready to connect as 'PVD-Patch'!");
+  Serial.println("[BLE] High-speed advertising started as 'PVD-Patch'!");
+}
+
+// Low-latency BLE batching buffer (flushes every 20ms to match BLE radio slots)
+static char bleBuffer[256];
+static int bleBufferLen = 0;
+static unsigned long lastBleFlush = 0;
+
+void flushBleStream() {
+  if (deviceConnected && pTxCharacteristic != nullptr && bleBufferLen > 0) {
+    pTxCharacteristic->setValue((uint8_t*)bleBuffer, bleBufferLen);
+    pTxCharacteristic->notify();
+    bleBufferLen = 0;
+    lastBleFlush = millis();
+  }
 }
 
 void streamTelemetry(unsigned long ts, unsigned long ir, float gx, float gy, float gz) {
@@ -90,13 +104,21 @@ void streamTelemetry(unsigned long ts, unsigned long ir, float gx, float gy, flo
   int len = snprintf(packet, sizeof(packet), "DATA,%lu,%lu,%.2f,%.2f,%.2f\n",
                      ts, ir, gx, gy, gz);
 
-  // 1. USB Serial output
+  // 1. USB Serial output (immediate)
   Serial.print(packet);
 
-  // 2. BLE notify to connected client
+  // 2. BLE notify (batched to prevent radio queue congestion)
   if (deviceConnected && pTxCharacteristic != nullptr) {
-    pTxCharacteristic->setValue((uint8_t*)packet, len);
-    pTxCharacteristic->notify();
+    if (bleBufferLen + len >= (int)sizeof(bleBuffer)) {
+      flushBleStream();
+    }
+    memcpy(bleBuffer + bleBufferLen, packet, len);
+    bleBufferLen += len;
+
+    // Flush every 4 samples (~20ms) or if buffer has >= 120 bytes
+    if (bleBufferLen >= 120 || (millis() - lastBleFlush) >= 20) {
+      flushBleStream();
+    }
   }
 }
 
@@ -512,13 +534,19 @@ void loop() {
 
   max30102.check();
 
+  static int mpuSkip = 0;
+  static float ax = 0, ay = 0, az = 0;
+  static float gx = 0, gy = 0, gz = 0;
+
   while (max30102.available()) {
     uint32_t irValue = max30102.getFIFOIR();
     uint32_t redValue = max30102.getFIFORed();
 
-    float ax = 0, ay = 0, az = 0;
-    float gx = 0, gy = 0, gz = 0;
-    readMPU6500(ax, ay, az, gx, gy, gz);
+    // Sample MPU6500 every 5th sample (40 Hz) to avoid I2C bus congestion
+    if (++mpuSkip >= 5) {
+      mpuSkip = 0;
+      readMPU6500(ax, ay, az, gx, gy, gz);
+    }
 
     // Stream real-time Finger PPG + Gyro (gx,gy,gz) over both Serial and BLE
     streamTelemetry(millis(), irValue, gx, gy, gz);
@@ -526,5 +554,6 @@ void loop() {
     max30102.nextSample();
   }
 
+  flushBleStream();
   delay(1);
 }
