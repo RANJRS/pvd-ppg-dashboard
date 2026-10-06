@@ -410,37 +410,21 @@ void setup() {
 // =====================================================
 
 void loop() {
-  // Reconnect WiFi if necessary
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi disconnected.");
-    connectWiFi();
+  max30102.check();
+
+  while (max30102.available()) {
+    uint32_t irValue = max30102.getFIFOIR();
+    uint32_t redValue = max30102.getFIFORed();
+
+    float ax = 0, ay = 0, az = 0;
+    float gx = 0, gy = 0, gz = 0;
+    readMPU6500(ax, ay, az, gx, gy, gz);
+
+    // Stream real-time Finger PPG + Gyro (gx,gy,gz) continuously at 200 Hz
+    Serial.printf("DATA,%lu,%lu,%.2f,%.2f,%.2f\n", millis(), irValue, gx, gy, gz);
+
+    max30102.nextSample();
   }
 
-  // -----------------------------------------
-  // Acquire 1600 samples
-  // -----------------------------------------
-
-  if (acquirePPGWindow()) {
-    // -----------------------------------------
-    // Send to Render
-    // -----------------------------------------
-
-    bool sent = sendDataToDashboard();
-
-    if (sent) {
-      Serial.println();
-      Serial.println("==========================================");
-      Serial.println("PPG DATA SENT SUCCESSFULLY");
-      Serial.println("==========================================");
-    } else {
-      Serial.println();
-      Serial.println("==========================================");
-      Serial.println("PPG DATA SEND FAILED");
-      Serial.println("==========================================");
-    }
-  }
-
-  Serial.println();
-  Serial.println("Starting next acquisition...");
-  delay(3000);
+  delay(1);
 }
