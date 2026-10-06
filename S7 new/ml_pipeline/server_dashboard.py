@@ -321,26 +321,12 @@ def predict_on_raw_dataset(csv_string, subject_id="esp32_subject", clinician_lab
             
     # 5. Load Model and Scaler
     with _model_lock:
-        if _model is None:
+        if _model is None or _scaler_mean is None or _scaler_scale is None:
             try:
-                import tensorflow as tf
-                model_path = os.path.join(PIPELINE_DIR, "model", "model.h5")
-                if not os.path.exists(model_path):
-                    return {"error": "Trained model (model.h5) not found. Run model training first."}
-                _model = tf.keras.models.load_model(model_path)
+                import model_assets
+                _model, _scaler_mean, _scaler_scale = model_assets.load_model_and_scalers(os.path.join(PIPELINE_DIR, "model"))
             except Exception as e:
-                return {"error": f"Failed to load TensorFlow model: {str(e)}"}
-                
-        if _scaler_mean is None or _scaler_scale is None:
-            scaler_mean_path = os.path.join(PIPELINE_DIR, "model", "scaler_mean.npy")
-            scaler_scale_path = os.path.join(PIPELINE_DIR, "model", "scaler_scale.npy")
-            if not os.path.exists(scaler_mean_path) or not os.path.exists(scaler_scale_path):
-                return {"error": "Scaler normalization files not found. Run model training first."}
-            try:
-                _scaler_mean = np.load(scaler_mean_path)
-                _scaler_scale = np.load(scaler_scale_path)
-            except Exception as e:
-                return {"error": f"Failed to load scaler variables: {str(e)}"}
+                return {"error": f"Failed to initialize model/scalers: {str(e)}"}
                 
     # 6. Normalize features and run inference
     try:

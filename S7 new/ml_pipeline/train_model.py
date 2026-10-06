@@ -147,7 +147,9 @@ def main():
         w1, b1 = dense_layers[0].get_weights()
         w2, b2 = dense_layers[1].get_weights()
         w3, b3 = dense_layers[2].get_weights()
-        np.savez(os.path.join(args.out, "model_weights.npz"), w1=w1, b1=b1, w2=w2, b2=b2, w3=w3, b3=b3)
+        np.savez(os.path.join(args.out, "model_weights.npz"), 
+                 w1=w1, b1=b1, w2=w2, b2=b2, w3=w3, b3=b3,
+                 scaler_mean=scaler.mean_, scaler_scale=scaler.scale_)
         print(f"Exported model_weights.npz to {args.out}/")
     except Exception as e:
         print(f"Warning: could not export model_weights.npz: {e}")

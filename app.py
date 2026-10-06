@@ -470,12 +470,18 @@ def dataset_upload():
     return jsonify({"status": "success" if not errors else "partial_error", "uploaded": saved, "errors": errors})
 
 # =====================================================
-# PREDICT
-# =====================================================
 _model = None
 _scaler_mean = None
 _scaler_scale = None
 _model_lock = threading.Lock()
+
+try:
+    import model_assets
+    _m_dir = os.path.join(PIPELINE_DIR, "model")
+    _model, _scaler_mean, _scaler_scale = model_assets.load_model_and_scalers(_m_dir)
+    print("[*] Preloaded ML model and normalization scalers successfully.")
+except Exception as _init_err:
+    print(f"[!] Model preload warning: {_init_err}")
 
 @app.route("/api/predict", methods=["POST"])
 def predict():
@@ -533,70 +539,13 @@ def predict():
             return jsonify({"error": f"Feature extraction failed: {e}"}), 500
 
     with _model_lock:
-        if _model is None:
+        if _model is None or _scaler_mean is None or _scaler_scale is None:
             try:
-                npz_path = os.path.join(PIPELINE_DIR, "model", "model_weights.npz")
-                model_path = os.path.join(PIPELINE_DIR, "model", "model.h5")
-                if os.path.exists(npz_path):
-                    data = np.load(npz_path)
-                    class MLPPredictor:
-                        def __init__(self, w1, b1, w2, b2, w3, b3):
-                            self.w1, self.b1 = w1, b1
-                            self.w2, self.b2 = w2, b2
-                            self.w3, self.b3 = w3, b3
-                        def predict(self, X):
-                            X = np.asarray(X, dtype=np.float32)
-                            h1 = np.maximum(0, np.dot(X, self.w1) + self.b1)
-                            h2 = np.maximum(0, np.dot(h1, self.w2) + self.b2)
-                            logits = np.dot(h2, self.w3) + self.b3
-                            exp_l = np.exp(logits - np.max(logits, axis=-1, keepdims=True))
-                            return exp_l / np.sum(exp_l, axis=-1, keepdims=True)
-                    _model = MLPPredictor(data['w1'], data['b1'], data['w2'], data['b2'], data['w3'], data['b3'])
-                elif os.path.exists(model_path):
-                    try:
-                        import h5py
-                        with h5py.File(model_path, "r") as f:
-                            w1 = f['model_weights/dense/sequential/dense/kernel'][:]
-                            b1 = f['model_weights/dense/sequential/dense/bias'][:]
-                            w2 = f['model_weights/dense_1/sequential/dense_1/kernel'][:]
-                            b2 = f['model_weights/dense_1/sequential/dense_1/bias'][:]
-                            w3 = f['model_weights/dense_2/sequential/dense_2/kernel'][:]
-                            b3 = f['model_weights/dense_2/sequential/dense_2/bias'][:]
-                        class MLPPredictor:
-                            def __init__(self, w1, b1, w2, b2, w3, b3):
-                                self.w1, self.b1 = w1, b1
-                                self.w2, self.b2 = w2, b2
-                                self.w3, self.b3 = w3, b3
-                            def predict(self, X):
-                                X = np.asarray(X, dtype=np.float32)
-                                h1 = np.maximum(0, np.dot(X, self.w1) + self.b1)
-                                h2 = np.maximum(0, np.dot(h1, self.w2) + self.b2)
-                                logits = np.dot(h2, self.w3) + self.b3
-                                exp_l = np.exp(logits - np.max(logits, axis=-1, keepdims=True))
-                                return exp_l / np.sum(exp_l, axis=-1, keepdims=True)
-                        _model = MLPPredictor(w1, b1, w2, b2, w3, b3)
-                    except Exception:
-                        import tensorflow as tf
-                        try:
-                            _model = tf.keras.models.load_model(model_path)
-                        except Exception:
-                            _model = tf.keras.Sequential([
-                                tf.keras.layers.Input(shape=(13,)),
-                                tf.keras.layers.Dense(16, activation="relu"),
-                                tf.keras.layers.Dense(8, activation="relu"),
-                                tf.keras.layers.Dense(3, activation="softmax"),
-                            ])
-                            _model.load_weights(model_path)
-                else:
-                    return jsonify({"error": "Model not trained yet. Run the ML pipeline first."}), 400
+                import model_assets
+                model_dir = os.path.join(PIPELINE_DIR, "model")
+                _model, _scaler_mean, _scaler_scale = model_assets.load_model_and_scalers(model_dir)
             except Exception as e:
-                return jsonify({"error": f"Model load failed: {e}"}), 500
-        if _scaler_mean is None:
-            try:
-                _scaler_mean = np.load(os.path.join(PIPELINE_DIR, "model", "scaler_mean.npy"))
-                _scaler_scale = np.load(os.path.join(PIPELINE_DIR, "model", "scaler_scale.npy"))
-            except Exception as e:
-                return jsonify({"error": f"Scaler load failed: {e}"}), 500
+                return jsonify({"error": f"Model initialization failed: {e}"}), 500
 
     X = np.array(features_list, dtype=np.float32)
     X_scaled = (X - _scaler_mean) / _scaler_scale
@@ -672,16 +621,18 @@ def clear_data():
             os.remove(p)
             logs += f"Removed {fname}\n"
 
-    for fname in ["model.h5", "scaler_mean.npy", "scaler_scale.npy", "training_report.json", "model.tflite"]:
+    for fname in ["model.tflite"]:
         p = os.path.join(model_dir, fname)
         if os.path.exists(p):
             os.remove(p)
             logs += f"Removed {fname}\n"
 
-    saved_model = os.path.join(model_dir, "saved_model")
-    if os.path.exists(saved_model):
-        shutil.rmtree(saved_model)
-        logs += "Removed saved_model/\n"
+    # Always ensure production model and scalers remain ready for live prediction
+    try:
+        import model_assets
+        model_assets.ensure_model_files(model_dir)
+    except Exception:
+        pass
 
     logs += "=== Cleanup Complete ===\n"
     with lock:
