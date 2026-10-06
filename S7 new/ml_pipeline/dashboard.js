@@ -1927,7 +1927,7 @@ async function loadRawDatasets() {
         if (datasets.length === 0) {
             listContainer.innerHTML = `
                 <tr>
-                    <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 24px;">
+                    <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 24px;">
                         No raw acquired datasets found in <code>data/raw/</code>. Record data or upload CSVs above.
                     </td>
                 </tr>
@@ -1935,8 +1935,8 @@ async function loadRawDatasets() {
             return;
         }
         
-        // Sort datasets by filename
-        datasets.sort((a, b) => a.filename.localeCompare(b.filename));
+        // Sort datasets by timestamp descending (newest captured first!)
+        datasets.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         
         let html = "";
         datasets.forEach(d => {
@@ -1967,6 +1967,7 @@ async function loadRawDatasets() {
                 <tr>
                     <td style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">${d.filename}</td>
                     <td><strong>${d.subject_id}</strong></td>
+                    <td style="color: var(--text-secondary); font-size: 0.78rem; white-space: nowrap;">📅 ${d.captured_at || "--"}</td>
                     <td style="color: var(--text-secondary);">${sizeKB} KB</td>
                     <td><span class="pipeline-badge ${badgeClass}" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 6px;">${labelName}</span></td>
                     <td>${options}</td>
@@ -1982,7 +1983,7 @@ async function loadRawDatasets() {
         console.error("Error loading raw datasets:", e);
         listContainer.innerHTML = `
             <tr>
-                <td colspan="6" style="text-align: center; color: var(--color-rose); padding: 24px;">
+                <td colspan="7" style="text-align: center; color: var(--color-rose); padding: 24px;">
                     Error loading raw datasets list: ${e.message}
                 </td>
             </tr>

@@ -12,6 +12,7 @@ if PIPELINE_DIR not in sys.path:
     sys.path.insert(0, PIPELINE_DIR)
 
 from flask import Flask, request, jsonify, send_from_directory, send_file
+from datetime import datetime
 import numpy as np
 import pandas as pd
 
@@ -109,6 +110,8 @@ def raw_list():
         if f.endswith('.csv'):
             filepath = os.path.join(raw_dir, f)
             size = os.path.getsize(filepath)
+            mtime = os.path.getmtime(filepath)
+            captured_at = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
             
             base, _ = os.path.splitext(f)
             parts = base.split("_")
@@ -131,7 +134,9 @@ def raw_list():
                 "filename": f,
                 "size_bytes": size,
                 "subject_id": subject_id,
-                "label": label_str
+                "label": label_str,
+                "captured_at": captured_at,
+                "timestamp": int(mtime)
             })
     return jsonify(files_list)
 

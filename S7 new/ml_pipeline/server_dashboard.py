@@ -1027,6 +1027,9 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if f.endswith('.csv'):
                     filepath = os.path.join(raw_dir, f)
                     size = os.path.getsize(filepath)
+                    mtime = os.path.getmtime(filepath)
+                    from datetime import datetime
+                    captured_at = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
                     
                     base, ext = os.path.splitext(f)
                     parts = base.split("_")
@@ -1049,7 +1052,9 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
                         "filename": f,
                         "size_bytes": size,
                         "subject_id": subject_id,
-                        "label": label_str
+                        "label": label_str,
+                        "captured_at": captured_at,
+                        "timestamp": int(mtime)
                     })
             
             self.send_response(200)
