@@ -310,11 +310,11 @@
                         <div style="display: flex; flex-direction: column; gap: 8px;">
                             <div style="display: flex; gap: 8px;">
                                 <input type="text" id="rec-subject-id" placeholder="Subject ID (e.g. SUB-101)" style="flex: 1; padding: 8px 12px; font-size: 0.85rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: var(--font-body);">
-                                <select id="rec-label" style="width: 155px; padding: 8px; font-size: 0.85rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);" title="Clinician Label: Expected diagnostic output">
-                                    <option value="normal" selected>Normal (Expected)</option>
-                                    <option value="moderate">Moderate (Expected)</option>
-                                    <option value="high">High (Expected)</option>
-                                    <option value="auto">🤖 Auto (Model Pred)</option>
+                                <select id="rec-label" style="width: 175px; padding: 8px; font-size: 0.85rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);" title="Diagnostic Output Label (Auto or Specific)">
+                                    <option value="auto" selected>🤖 Auto (Normal / Mod / High)</option>
+                                    <option value="normal">Normal</option>
+                                    <option value="moderate">Moderate</option>
+                                    <option value="high">High</option>
                                 </select>
                             </div>
                             <div style="display: flex; gap: 8px;">
@@ -367,14 +367,14 @@
                                 </div>
                             </div>
                             <div class="text-center">
-                                <h2 id="esp32-result-risk-name" class="pipeline-badge" style="font-size: 1.4rem; padding: 6px 20px; border-radius: 12px; margin-bottom: 8px; display: inline-block;">Normal</h2>
+                                <h2 id="esp32-result-risk-name" class="pipeline-badge badge-normal" style="font-size: 1.4rem; padding: 6px 20px; border-radius: 12px; margin-bottom: 8px; display: inline-block;">Normal</h2>
                                 
                                 <!-- Comparison bar: Expected Output vs Predicted Output -->
                                 <div id="esp32-comparison-container" style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; padding: 6px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.82rem;">
-                                    <span>Expected: <strong id="esp32-comp-expected" style="color: var(--color-emerald);">Normal</strong></span>
+                                    <span>Diagnosis: <strong id="esp32-comp-predicted" style="color: var(--color-emerald);">Normal</strong></span>
                                     <span style="color: rgba(255,255,255,0.2);">|</span>
-                                    <span>Predicted: <strong id="esp32-comp-predicted" style="color: var(--color-cyan);">Normal</strong></span>
-                                    <span id="esp32-comp-match" class="pipeline-badge badge-normal" style="font-size: 0.7rem; padding: 2px 8px; border-radius: 6px;">Match</span>
+                                    <span>Output: <strong id="esp32-comp-expected" style="color: var(--color-emerald);">Normal</strong></span>
+                                    <span id="esp32-comp-match" class="pipeline-badge badge-normal" style="font-size: 0.7rem; padding: 2px 8px; border-radius: 6px;">Normal</span>
                                 </div>
 
                                 <p style="font-size: 0.85rem; color: var(--text-secondary); max-width: 260px; margin: 0 auto;" id="esp32-result-desc">No indicators of Peripheral Vascular Disease detected. Heart rates and pulse transit latency are within physiological norms.</p>
@@ -492,7 +492,7 @@
                                         <th>Subject ID</th>
                                         <th>Captured Timestamp</th>
                                         <th>Size</th>
-                                        <th>Clinician Label (Expected Output)</th>
+                                        <th>Diagnostic Output (Normal / Moderate / High)</th>
                                         <th>Re-label Action</th>
                                         <th style="text-align: center;">Actions</th>
                                     </tr>

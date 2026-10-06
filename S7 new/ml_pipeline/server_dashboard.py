@@ -272,25 +272,9 @@ def predict_on_raw_dataset(csv_string, subject_id="esp32_subject", clinician_lab
     if len(df) < 1600:
         return {"error": "Recording too short. Please record at least 8 seconds of data (1600 samples at 200 Hz)."}
         
-    # 2. Check and save if requested
+    # 2. Check dataset length
     saved_filename = ""
     saved_on_disk = False
-    if save_dataset and subject_id and clinician_label:
-        raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
-        os.makedirs(raw_dir, exist_ok=True)
-        # format: <subject_id>_<label>.csv
-        safe_subject_id = "".join([c if c.isalnum() or c in ('-', '_') else '_' for c in subject_id])
-        safe_label = clinician_label.lower()
-        if safe_label not in ('normal', 'moderate', 'high'):
-            safe_label = 'normal'
-        filename = f"{safe_subject_id}_{safe_label}.csv"
-        dest_path = os.path.join(raw_dir, filename)
-        try:
-            df.to_csv(dest_path, index=False)
-            saved_filename = filename
-            saved_on_disk = True
-        except Exception as e:
-            print(f"[Warning] Failed to save dataset: {str(e)}")
             
     # 3. Preprocess and Segment using imported helper or direct logic
     try:
@@ -365,7 +349,28 @@ def predict_on_raw_dataset(csv_string, subject_id="esp32_subject", clinician_lab
     avg_probs = np.mean(probs, axis=0).tolist()
     final_risk_level = int(np.argmax(avg_probs))
     final_risk_name = label_names[final_risk_level]
-    
+    predicted_label = final_risk_name.lower()
+
+    # Save dataset if requested
+    if save_dataset and subject_id:
+        raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
+        os.makedirs(raw_dir, exist_ok=True)
+        safe_subject_id = "".join([c if c.isalnum() or c in ('-', '_') else '_' for c in subject_id])
+        if clinician_label and clinician_label.lower() in ('normal', 'moderate', 'high'):
+            safe_label = clinician_label.lower()
+        else:
+            safe_label = predicted_label
+        filename = f"{safe_subject_id}_{safe_label}.csv"
+        dest_path = os.path.join(raw_dir, filename)
+        try:
+            df.to_csv(dest_path, index=False)
+            saved_filename = filename
+            saved_on_disk = True
+        except Exception as e:
+            print(f"[Warning] Failed to save dataset: {str(e)}")
+
+    expected_label = (clinician_label if clinician_label and clinician_label.lower() in ("normal", "moderate", "high") else label_names[final_risk_level]).capitalize()
+
     # Calculate mock risk score for Twilio message context
     risk_score = (avg_probs[1] * 0.5 + avg_probs[2] * 1.0) * 100
     return {
@@ -376,6 +381,7 @@ def predict_on_raw_dataset(csv_string, subject_id="esp32_subject", clinician_lab
             "average_probabilities": avg_probs,
             "final_risk_level": final_risk_level,
             "final_risk_name": final_risk_name,
+            "expected_label": expected_label,
             "saved": saved_on_disk,
             "saved_filename": saved_filename
         }

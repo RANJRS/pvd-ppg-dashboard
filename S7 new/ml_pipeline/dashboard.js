@@ -1880,11 +1880,13 @@ function displayPredictionReport(report) {
     
     drawRiskGauge(riskScore, finalRiskName);
 
-    // Update Expected Output vs Predicted Output
+    // Update Diagnostic Output and Assessment Badges (Normal, Moderate, High)
     const recLabelElem = document.getElementById("rec-label");
     const rawExpected = recLabelElem ? recLabelElem.value : "auto";
     let expectedLabel = report.summary.expected_label;
-    if (!expectedLabel || rawExpected !== "auto") {
+    if (!expectedLabel || rawExpected === "auto") {
+        expectedLabel = finalRiskName;
+    } else {
         if (rawExpected === "normal") expectedLabel = "Normal";
         else if (rawExpected === "moderate") expectedLabel = "Moderate";
         else if (rawExpected === "high") expectedLabel = "High";
@@ -1896,23 +1898,50 @@ function displayPredictionReport(report) {
     const compPredicted = document.getElementById("esp32-comp-predicted");
     const compMatch = document.getElementById("esp32-comp-match");
 
-    if (badgeExpected) badgeExpected.innerText = `Expected: ${expectedLabel}`;
-    if (compExpected) {
-        compExpected.innerText = expectedLabel;
-        if (expectedLabel.toLowerCase() === "normal") compExpected.style.color = "var(--color-emerald)";
-        else if (expectedLabel.toLowerCase() === "moderate") compExpected.style.color = "var(--color-amber)";
-        else compExpected.style.color = "var(--color-rose)";
+    const getRiskColor = (lbl) => {
+        const l = (lbl || "").toLowerCase();
+        if (l === "normal") return "var(--color-emerald, #10b981)";
+        if (l === "moderate") return "var(--color-amber, #f59e0b)";
+        if (l === "high") return "var(--color-rose, #f43f5e)";
+        return "var(--color-cyan, #06b6d4)";
+    };
+
+    const getBadgeClass = (lbl) => {
+        const l = (lbl || "").toLowerCase();
+        if (l === "normal") return "badge-normal";
+        if (l === "moderate") return "badge-moderate";
+        if (l === "high") return "badge-high";
+        return "badge-idle";
+    };
+
+    if (badgeExpected) {
+        if (rawExpected === "auto") {
+            badgeExpected.innerText = `Diagnosis: ${finalRiskName}`;
+        } else {
+            badgeExpected.innerText = `Expected: ${expectedLabel}`;
+        }
+        badgeExpected.className = `pipeline-badge ${getBadgeClass(finalRiskName)}`;
     }
+
     if (compPredicted) {
         compPredicted.innerText = finalRiskName;
-        if (finalRiskName.toLowerCase() === "normal") compPredicted.style.color = "var(--color-emerald)";
-        else if (finalRiskName.toLowerCase() === "moderate") compPredicted.style.color = "var(--color-amber)";
-        else compPredicted.style.color = "var(--color-rose)";
+        compPredicted.style.color = getRiskColor(finalRiskName);
     }
+
+    if (compExpected) {
+        compExpected.innerText = expectedLabel;
+        compExpected.style.color = getRiskColor(expectedLabel);
+    }
+
     if (compMatch) {
-        const isMatch = expectedLabel.toLowerCase() === finalRiskName.toLowerCase();
-        compMatch.innerText = isMatch ? "✅ Match" : "⚠️ Discrepancy";
-        compMatch.className = `pipeline-badge ${isMatch ? "badge-normal" : "badge-moderate"}`;
+        if (rawExpected === "auto") {
+            compMatch.innerText = finalRiskName;
+            compMatch.className = `pipeline-badge ${getBadgeClass(finalRiskName)}`;
+        } else {
+            const isMatch = expectedLabel.toLowerCase() === finalRiskName.toLowerCase();
+            compMatch.innerText = isMatch ? `✅ Match (${finalRiskName})` : "⚠️ Discrepancy";
+            compMatch.className = `pipeline-badge ${isMatch ? getBadgeClass(finalRiskName) : "badge-moderate"}`;
+        }
     }
     
     // 3. Save status
