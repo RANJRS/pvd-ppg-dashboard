@@ -1825,6 +1825,41 @@ function displayPredictionReport(report) {
     const riskScore = (avgProbs[1] * 0.5 + avgProbs[2] * 1.0) * 100;
     
     drawRiskGauge(riskScore, finalRiskName);
+
+    // Update Expected Output vs Predicted Output
+    const recLabelElem = document.getElementById("rec-label");
+    const rawExpected = recLabelElem ? recLabelElem.value : "auto";
+    let expectedLabel = report.summary.expected_label;
+    if (!expectedLabel || rawExpected !== "auto") {
+        if (rawExpected === "normal") expectedLabel = "Normal";
+        else if (rawExpected === "moderate") expectedLabel = "Moderate";
+        else if (rawExpected === "high") expectedLabel = "High";
+        else expectedLabel = finalRiskName;
+    }
+
+    const badgeExpected = document.getElementById("esp32-expected-badge");
+    const compExpected = document.getElementById("esp32-comp-expected");
+    const compPredicted = document.getElementById("esp32-comp-predicted");
+    const compMatch = document.getElementById("esp32-comp-match");
+
+    if (badgeExpected) badgeExpected.innerText = `Expected: ${expectedLabel}`;
+    if (compExpected) {
+        compExpected.innerText = expectedLabel;
+        if (expectedLabel.toLowerCase() === "normal") compExpected.style.color = "var(--color-emerald)";
+        else if (expectedLabel.toLowerCase() === "moderate") compExpected.style.color = "var(--color-amber)";
+        else compExpected.style.color = "var(--color-rose)";
+    }
+    if (compPredicted) {
+        compPredicted.innerText = finalRiskName;
+        if (finalRiskName.toLowerCase() === "normal") compPredicted.style.color = "var(--color-emerald)";
+        else if (finalRiskName.toLowerCase() === "moderate") compPredicted.style.color = "var(--color-amber)";
+        else compPredicted.style.color = "var(--color-rose)";
+    }
+    if (compMatch) {
+        const isMatch = expectedLabel.toLowerCase() === finalRiskName.toLowerCase();
+        compMatch.innerText = isMatch ? "✅ Match" : "⚠️ Discrepancy";
+        compMatch.className = `pipeline-badge ${isMatch ? "badge-normal" : "badge-moderate"}`;
+    }
     
     // 3. Save status
     const saveStatus = document.getElementById("res-save-status");

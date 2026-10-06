@@ -632,6 +632,8 @@ def predict():
         saved_filename = f"{safe}_{lbl}.csv"
         df.to_csv(os.path.join(raw_dir, saved_filename), index=False)
 
+    expected_label = (clinician_label if clinician_label and clinician_label.lower() in ("normal", "moderate", "high") else label_names[final_risk]).capitalize()
+
     return jsonify({
         "status": "success",
         "windows": results,
@@ -640,6 +642,7 @@ def predict():
             "average_probabilities": avg_probs,
             "final_risk_level": final_risk,
             "final_risk_name": label_names[final_risk],
+            "expected_label": expected_label,
             "saved": bool(save_dataset and saved_filename),
             "saved_filename": saved_filename
         }
