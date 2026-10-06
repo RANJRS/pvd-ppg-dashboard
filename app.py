@@ -197,10 +197,10 @@ def raw_delete():
     raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
     filepath = os.path.join(raw_dir, filename)
     if not os.path.exists(filepath):
-        return jsonify({"error": "File not found"}), 404
+        return jsonify({"status": "success", "message": "File already removed"}), 200
     try:
         os.remove(filepath)
-        return jsonify({"status": "success"})
+        return jsonify({"status": "success"}), 200
     except Exception as e:
         return jsonify({"error": f"Delete failed: {e}"}), 500
 

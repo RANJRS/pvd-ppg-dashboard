@@ -2270,20 +2270,26 @@ async function executeDeleteAction() {
             });
         }
 
-        if (res && res.ok) {
-            const data = await res.json();
-            console.log("[Dashboard] Delete success:", data);
-            await loadRawDatasets();
-            reloadData();
-        } else {
-            const err = await res.json();
-            alert(`Failed to delete: ${err.error || "Unknown server error"}`);
+        if (res) {
+            let data = null;
+            try {
+                data = await res.json();
+            } catch (_) {}
+
+            if (res.ok) {
+                console.log("[Dashboard] Delete success:", data);
+            } else {
+                const errMsg = (data && data.error) ? data.error : (res.status === 404 ? "File already removed." : `Server status ${res.status}`);
+                console.warn("[Dashboard] Delete notice:", errMsg);
+            }
         }
     } catch (e) {
         console.error("Error executing delete:", e);
-        alert(`Error executing delete: ${e.message}`);
     } finally {
         if (btnConfirm) btnConfirm.disabled = false;
+        // Always refresh the dataset table so removed files disappear cleanly
+        await loadRawDatasets();
+        reloadData();
     }
 }
 
