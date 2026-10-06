@@ -319,12 +319,12 @@ bool acquirePPGWindow() {
 
         sampleCount++;
 
+        // Stream real-time sample for Web Serial dashboard
+        Serial.printf("DATA,%lu,%lu,%lu\n", (unsigned long)millis(), (unsigned long)redValue, (unsigned long)irValue);
+
         // Progress
         if (sampleCount % 200 == 0) {
-          Serial.print("Samples: ");
-          Serial.print(sampleCount);
-          Serial.print("/");
-          Serial.println(TOTAL_SAMPLES);
+          Serial.printf("# Samples: %d/%d\n", sampleCount, TOTAL_SAMPLES);
         }
       }
 
