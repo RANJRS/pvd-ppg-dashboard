@@ -111,7 +111,10 @@ def raw_list():
             filepath = os.path.join(raw_dir, f)
             size = os.path.getsize(filepath)
             mtime = os.path.getmtime(filepath)
-            captured_at = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+            from datetime import timezone
+            dt_utc = datetime.fromtimestamp(mtime, tz=timezone.utc)
+            captured_at = dt_utc.strftime("%Y-%m-%d %H:%M:%S")
+            iso_timestamp = dt_utc.isoformat()
             
             base, _ = os.path.splitext(f)
             parts = base.split("_")
@@ -136,6 +139,7 @@ def raw_list():
                 "subject_id": subject_id,
                 "label": label_str,
                 "captured_at": captured_at,
+                "iso_timestamp": iso_timestamp,
                 "timestamp": int(mtime)
             })
     return jsonify(files_list)

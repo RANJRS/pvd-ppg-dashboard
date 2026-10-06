@@ -1028,8 +1028,10 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
                     filepath = os.path.join(raw_dir, f)
                     size = os.path.getsize(filepath)
                     mtime = os.path.getmtime(filepath)
-                    from datetime import datetime
-                    captured_at = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+                    from datetime import datetime, timezone
+                    dt_utc = datetime.fromtimestamp(mtime, tz=timezone.utc)
+                    captured_at = dt_utc.strftime("%Y-%m-%d %H:%M:%S")
+                    iso_timestamp = dt_utc.isoformat()
                     
                     base, ext = os.path.splitext(f)
                     parts = base.split("_")
@@ -1054,6 +1056,7 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
                         "subject_id": subject_id,
                         "label": label_str,
                         "captured_at": captured_at,
+                        "iso_timestamp": iso_timestamp,
                         "timestamp": int(mtime)
                     })
             

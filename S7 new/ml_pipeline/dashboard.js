@@ -1938,9 +1938,43 @@ async function loadRawDatasets() {
         // Sort datasets by timestamp descending (newest captured first!)
         datasets.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         
+        // Helper to convert UTC/epoch timestamps from server to user's local browser timezone
+        function formatLocalTimestamp(d) {
+            if (!d) return "--";
+            let dt = null;
+            if (d.timestamp) {
+                dt = new Date(d.timestamp * 1000);
+            } else if (d.iso_timestamp) {
+                dt = new Date(d.iso_timestamp);
+            } else if (d.captured_at) {
+                let s = d.captured_at.trim();
+                if (!s.endsWith("Z") && !s.includes("+") && !s.includes("UTC")) {
+                    s = s.replace(" ", "T") + "Z";
+                } else {
+                    s = s.replace(" UTC", "Z").replace(" ", "T");
+                }
+                dt = new Date(s);
+                if (isNaN(dt.getTime())) {
+                    dt = new Date(d.captured_at);
+                }
+            }
+            if (!dt || isNaN(dt.getTime())) {
+                return d.captured_at || "--";
+            }
+            const pad = (n) => String(n).padStart(2, "0");
+            const y = dt.getFullYear();
+            const m = pad(dt.getMonth() + 1);
+            const day = pad(dt.getDate());
+            const hh = pad(dt.getHours());
+            const mm = pad(dt.getMinutes());
+            const ss = pad(dt.getSeconds());
+            return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+        }
+
         let html = "";
         datasets.forEach(d => {
             const sizeKB = (d.size_bytes / 1024).toFixed(1);
+            const localTimeStr = formatLocalTimestamp(d);
             
             // Format labels with badge style
             let badgeClass = "badge-idle";
@@ -1967,7 +2001,7 @@ async function loadRawDatasets() {
                 <tr>
                     <td style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">${d.filename}</td>
                     <td><strong>${d.subject_id}</strong></td>
-                    <td style="color: var(--text-secondary); font-size: 0.78rem; white-space: nowrap;">📅 ${d.captured_at || "--"}</td>
+                    <td style="color: var(--text-secondary); font-size: 0.78rem; white-space: nowrap;">📅 ${localTimeStr}</td>
                     <td style="color: var(--text-secondary);">${sizeKB} KB</td>
                     <td><span class="pipeline-badge ${badgeClass}" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 6px;">${labelName}</span></td>
                     <td>${options}</td>
