@@ -1,437 +1,446 @@
-#include <Arduino.h>
-#include <Wire.h>
-#include <WiFi.h>
-#include <HTTPClient.h>
 #include "MAX30105.h"
+#include <Arduino.h>
+#include <HTTPClient.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <Wire.h>
 
 // =====================================================
-// DEVICE CONFIGURATION
+// WIFI
 // =====================================================
 
-#define DEVICE_ID "PVD_PATCH_001"
+const char *WIFI_SSID = "Ranji";
+const char *WIFI_PASSWORD = "12345678";
 
-// ESP32-S3 I2C pins
+// Your Render API
+const char *SERVER_URL = "https://pvd-ppg-dashboard.onrender.com";
+
+// =====================================================
+// I2C
+// =====================================================
+
 #define SDA_PIN 8
 #define SCL_PIN 9
 
-// PPG configuration
+#define MPU6500_ADDR 0x68
+
+// =====================================================
+// DATA SETTINGS
+// =====================================================
+
 #define SAMPLE_RATE 200
 #define WINDOW_SECONDS 8
-#define NUM_SAMPLES (SAMPLE_RATE * WINDOW_SECONDS)
+#define TOTAL_SAMPLES (SAMPLE_RATE * WINDOW_SECONDS)
 
 // =====================================================
-// WIFI CONFIGURATION
+// SENSORS
 // =====================================================
 
-const char* WIFI_SSID = "Ranjith's S25FE";
-const char* WIFI_PASSWORD = "12345678";
+MAX30105 max30102;
 
 // =====================================================
-// DASHBOARD API
+// MPU6500 REGISTERS
 // =====================================================
 
-// CHANGE THIS TO YOUR DASHBOARD BACKEND API
-const char* SERVER_URL =
-    "http://10.122.243.56:8001/api/ppg";
+#define PWR_MGMT_1 0x6B
+#define CONFIG_REG 0x1A
+#define GYRO_CONFIG 0x1B
+#define ACCEL_CONFIG 0x1C
+#define ACCEL_XOUT_H 0x3B
+#define WHO_AM_I_REG 0x75
 
 // =====================================================
-// MAX30102
+// CSV STORAGE
 // =====================================================
 
-MAX30105 particleSensor;
+String csvData;
 
 // =====================================================
-// DATA BUFFER
+// MPU6500 FUNCTIONS
 // =====================================================
 
-struct PPGSample
-{
-    unsigned long timestamp;
-    long red;
-    long ir;
-};
+void writeMPU(uint8_t reg, uint8_t value) {
+  Wire.beginTransmission(MPU6500_ADDR);
+  Wire.write(reg);
+  Wire.write(value);
+  Wire.endTransmission();
+}
 
-PPGSample samples[NUM_SAMPLES];
+uint8_t readMPU(uint8_t reg) {
+  Wire.beginTransmission(MPU6500_ADDR);
+  Wire.write(reg);
+  Wire.endTransmission(false);
 
-int sampleIndex = 0;
+  Wire.requestFrom(MPU6500_ADDR, 1);
 
-unsigned long lastSampleTime = 0;
+  if (Wire.available())
+    return Wire.read();
 
-const unsigned long sampleInterval =
-    1000000UL / SAMPLE_RATE;
+  return 0;
+}
 
-// =====================================================
-// WIFI CONNECTION
-// =====================================================
+bool initMPU6500() {
+  uint8_t id = readMPU(WHO_AM_I_REG);
 
-void connectWiFi()
-{
-    Serial.println();
-    Serial.println("Connecting to Wi-Fi...");
+  Serial.print("MPU6500 WHO_AM_I = 0x");
+  Serial.println(id, HEX);
 
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  if (id != 0x70)
+    return false;
 
-    int attempts = 0;
+  // Wake sensor
+  writeMPU(PWR_MGMT_1, 0x00);
+  delay(100);
 
-    while (WiFi.status() != WL_CONNECTED && attempts < 30)
-    {
-        delay(500);
+  // Low-pass filter
+  writeMPU(CONFIG_REG, 0x03);
 
-        Serial.print(".");
+  // Gyroscope ±500 deg/s
+  writeMPU(GYRO_CONFIG, 0x08);
 
-        attempts++;
-    }
+  // Accelerometer ±4g
+  writeMPU(ACCEL_CONFIG, 0x08);
 
-    Serial.println();
+  return true;
+}
 
-    if (WiFi.status() == WL_CONNECTED)
-    {
-        Serial.println("Wi-Fi connected!");
+bool readMPU6500(float &ax, float &ay, float &az, float &gx, float &gy,
+                 float &gz) {
+  Wire.beginTransmission(MPU6500_ADDR);
+  Wire.write(ACCEL_XOUT_H);
 
-        Serial.print("ESP32 IP: ");
-        Serial.println(WiFi.localIP());
+  if (Wire.endTransmission(false) != 0)
+    return false;
 
-        Serial.print("RSSI: ");
-        Serial.println(WiFi.RSSI());
-    }
-    else
-    {
-        Serial.println("Wi-Fi connection FAILED.");
-    }
+  Wire.requestFrom(MPU6500_ADDR, 14);
+
+  if (Wire.available() < 14)
+    return false;
+
+  int16_t rawAx = (Wire.read() << 8) | Wire.read();
+  int16_t rawAy = (Wire.read() << 8) | Wire.read();
+  int16_t rawAz = (Wire.read() << 8) | Wire.read();
+
+  // Skip temperature
+  Wire.read();
+  Wire.read();
+
+  int16_t rawGx = (Wire.read() << 8) | Wire.read();
+  int16_t rawGy = (Wire.read() << 8) | Wire.read();
+  int16_t rawGz = (Wire.read() << 8) | Wire.read();
+
+  // ±4g
+  ax = rawAx / 8192.0;
+  ay = rawAy / 8192.0;
+  az = rawAz / 8192.0;
+
+  // ±500 deg/s
+  gx = rawGx / 65.5;
+  gy = rawGy / 65.5;
+  gz = rawGz / 65.5;
+
+  return true;
 }
 
 // =====================================================
-// MAX30102 INITIALIZATION
+// WIFI
 // =====================================================
 
-bool initializePPG()
-{
-    Serial.println("Initializing MAX30102...");
+bool connectWiFi() {
+  Serial.println();
+  Serial.println("==========================================");
+  Serial.println("CONNECTING TO WIFI");
+  Serial.println("==========================================");
 
-    Wire.begin(SDA_PIN, SCL_PIN);
+  Serial.print("SSID: ");
+  Serial.println(WIFI_SSID);
 
-    if (!particleSensor.begin(Wire, I2C_SPEED_FAST))
-    {
-        Serial.println("ERROR: MAX30102 not detected!");
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-        return false;
-    }
+  int attempts = 0;
 
-    Serial.println("MAX30102 detected.");
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
 
-    // MAX30102 configuration
+  Serial.println();
 
-    byte ledBrightness = 60;
-
-    byte sampleAverage = 1;
-
-    byte ledMode = 2;     // RED + IR
-
-    int sampleRate = 200;
-
-    int pulseWidth = 411;
-
-    int adcRange = 4096;
-
-    particleSensor.setup(
-        ledBrightness,
-        sampleAverage,
-        ledMode,
-        sampleRate,
-        pulseWidth,
-        adcRange
-    );
-
-    particleSensor.setPulseAmplitudeRed(0x24);
-
-    particleSensor.setPulseAmplitudeIR(0x24);
-
-    Serial.println("PPG configured.");
-
-    Serial.println("Sample rate: 200 Hz");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("WIFI CONNECTED");
+    Serial.print("IP ADDRESS: ");
+    Serial.println(WiFi.localIP());
 
     return true;
+  }
+
+  Serial.println("WIFI CONNECTION FAILED");
+
+  return false;
 }
 
 // =====================================================
 // SEND DATA TO DASHBOARD
 // =====================================================
 
-bool sendPPGData()
-{
-    if (WiFi.status() != WL_CONNECTED)
-    {
-        Serial.println("Wi-Fi disconnected.");
+bool sendDataToDashboard() {
+  Serial.println();
+  Serial.println("==========================================");
+  Serial.println("SENDING DATA TO DASHBOARD");
+  Serial.println("==========================================");
 
-        connectWiFi();
+  Serial.print("Payload size: ");
+  Serial.print(csvData.length());
+  Serial.println(" bytes");
 
-        if (WiFi.status() != WL_CONNECTED)
-        {
-            return false;
-        }
-    }
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi disconnected.");
+    return false;
+  }
+
+  WiFiClientSecure client;
+
+  // Prototype mode.
+  // Render uses HTTPS.
+  client.setInsecure();
+
+  HTTPClient https;
+
+  Serial.println("Connecting to Render...");
+
+  if (!https.begin(client, SERVER_URL)) {
+    Serial.println("HTTPS CONNECTION FAILED");
+    return false;
+  }
+
+  https.setTimeout(30000);
+
+  // Tell Flask that we are sending raw CSV
+  https.addHeader("Content-Type", "text/csv");
+  https.addHeader("X-Device-ID", "PVD_PATCH_001");
+
+  Serial.println("Uploading 1600 samples...");
+
+  int httpCode = https.POST(csvData);
+
+  Serial.print("HTTP response: ");
+  Serial.println(httpCode);
+
+  if (httpCode > 0) {
+    String response = https.getString();
 
     Serial.println();
-    Serial.println("Preparing PPG data...");
+    Serial.println("SERVER RESPONSE:");
+    Serial.println(response);
 
-    // -------------------------------------------------
-    // Create CSV payload
-    // -------------------------------------------------
+    https.end();
 
-    String payload;
-
-    payload.reserve(60000);
-
-    payload += "device_id,timestamp_ms,red,ir\n";
-
-    for (int i = 0; i < NUM_SAMPLES; i++)
-    {
-        payload += DEVICE_ID;
-        payload += ",";
-
-        payload += String(samples[i].timestamp);
-        payload += ",";
-
-        payload += String(samples[i].red);
-        payload += ",";
-
-        payload += String(samples[i].ir);
-
-        payload += "\n";
+    if (httpCode >= 200 && httpCode < 300) {
+      return true;
     }
-
-    Serial.print("Payload size: ");
-
-    Serial.print(payload.length());
-
-    Serial.println(" bytes");
-
-    // -------------------------------------------------
-    // HTTP POST
-    // -------------------------------------------------
-
-    HTTPClient http;
-
-    Serial.println("Sending data to dashboard...");
-
-    http.begin(SERVER_URL);
-
-    http.addHeader(
-        "Content-Type",
-        "text/csv"
-    );
-
-    http.addHeader(
-        "X-Device-ID",
-        DEVICE_ID
-    );
-
-    int httpCode = http.POST(payload);
-
-    Serial.print("HTTP response: ");
-
-    Serial.println(httpCode);
-
-    if (httpCode > 0)
-    {
-        String response = http.getString();
-
-        Serial.println("Server response:");
-
-        Serial.println(response);
-
-        http.end();
-
-        return httpCode >= 200 && httpCode < 300;
-    }
-
+  } else {
     Serial.print("HTTP error: ");
+    Serial.println(https.errorToString(httpCode));
+  }
 
-    Serial.println(
-        http.errorToString(httpCode)
-    );
+  https.end();
 
-    http.end();
-
-    return false;
+  return false;
 }
 
 // =====================================================
-// COLLECT PPG WINDOW
+// ACQUIRE 1600 SAMPLES
 // =====================================================
 
-void collectPPGWindow()
-{
-    Serial.println();
-    Serial.println("==============================");
+bool acquirePPGWindow() {
+  csvData = "";
 
-    Serial.println(
-        "Collecting 8-second PPG window"
-    );
+  // Reserve memory to reduce fragmentation
+  csvData.reserve(70000);
 
-    Serial.println("==============================");
+  // CSV header
+  csvData = "SAMPLE,TIME_US,IR,RED,AX,AY,AZ,GX,GY,GZ\n";
 
-    sampleIndex = 0;
+  int sampleCount = 0;
 
-    lastSampleTime = micros();
+  Serial.println();
+  Serial.println("==========================================");
+  Serial.println("COLLECTING 8-SECOND PPG WINDOW");
+  Serial.println("==========================================");
 
-    while (sampleIndex < NUM_SAMPLES)
-    {
-        unsigned long currentTime = micros();
+  while (sampleCount < TOTAL_SAMPLES) {
+    max30102.check();
 
-        if (currentTime - lastSampleTime >= sampleInterval)
-        {
-            lastSampleTime += sampleInterval;
+    while (max30102.available() && sampleCount < TOTAL_SAMPLES) {
+      uint32_t irValue = max30102.getFIFOIR();
 
-            long redValue =
-                particleSensor.getRed();
+      uint32_t redValue = max30102.getFIFORed();
 
-            long irValue =
-                particleSensor.getIR();
+      float ax, ay, az;
+      float gx, gy, gz;
 
-            samples[sampleIndex].timestamp =
-                millis();
+      bool motionOK = readMPU6500(ax, ay, az, gx, gy, gz);
 
-            samples[sampleIndex].red =
-                redValue;
+      if (motionOK) {
+        uint32_t timestamp = micros();
 
-            samples[sampleIndex].ir =
-                irValue;
+        // Add CSV row
+        csvData += String(sampleCount);
+        csvData += ",";
 
-            sampleIndex++;
+        csvData += String(timestamp);
+        csvData += ",";
 
-            particleSensor.nextSample();
+        csvData += String(irValue);
+        csvData += ",";
 
-            // Progress indication
-            if (sampleIndex % 200 == 0)
-            {
-                Serial.print("Samples: ");
+        csvData += String(redValue);
+        csvData += ",";
 
-                Serial.print(sampleIndex);
+        csvData += String(ax, 4);
+        csvData += ",";
 
-                Serial.print("/");
+        csvData += String(ay, 4);
+        csvData += ",";
 
-                Serial.println(NUM_SAMPLES);
-            }
+        csvData += String(az, 4);
+        csvData += ",";
+
+        csvData += String(gx, 2);
+        csvData += ",";
+
+        csvData += String(gy, 2);
+        csvData += ",";
+
+        csvData += String(gz, 2);
+        csvData += "\n";
+
+        sampleCount++;
+
+        // Progress
+        if (sampleCount % 200 == 0) {
+          Serial.print("Samples: ");
+          Serial.print(sampleCount);
+          Serial.print("/");
+          Serial.println(TOTAL_SAMPLES);
         }
+      }
+
+      max30102.nextSample();
     }
 
-    Serial.println();
+    delay(1);
+  }
 
-    Serial.println(
-        "PPG window complete."
-    );
+  Serial.println();
+  Serial.println("PPG WINDOW COMPLETE.");
+
+  Serial.print("Final samples: ");
+  Serial.println(sampleCount);
+
+  Serial.print("CSV size: ");
+  Serial.print(csvData.length());
+  Serial.println(" bytes");
+
+  return true;
 }
 
 // =====================================================
 // SETUP
 // =====================================================
 
-void setup()
-{
-    Serial.begin(115200);
+void setup() {
+  Serial.begin(115200);
 
-    delay(1500);
+  delay(2000);
 
-    Serial.println();
-    Serial.println(
-        "========================================"
-    );
+  Wire.begin(SDA_PIN, SCL_PIN);
+  Wire.setClock(400000);
 
-    Serial.println(
-        " PPG-BASED PVD EARLY WARNING PATCH"
-    );
+  Serial.println();
+  Serial.println("==========================================");
+  Serial.println("      PVD PPG SMART PATCH");
+  Serial.println("==========================================");
 
-    Serial.println(
-        " ESP32-S3 DATA ACQUISITION SYSTEM"
-    );
+  // -----------------------------------------
+  // MAX30102
+  // -----------------------------------------
 
-    Serial.println(
-        "========================================"
-    );
+  if (!max30102.begin(Wire, I2C_SPEED_FAST)) {
+    Serial.println("ERROR: MAX30102 NOT FOUND!");
 
-    Serial.print("Device ID: ");
+    while (1)
+      delay(1000);
+  }
 
-    Serial.println(DEVICE_ID);
+  Serial.println("MAX30102: OK");
 
-    Serial.print("Sampling rate: ");
+  max30102.setup(60, 1, 2, 200, 411, 4096);
 
-    Serial.print(SAMPLE_RATE);
+  max30102.setPulseAmplitudeRed(0x24);
+  max30102.setPulseAmplitudeIR(0x24);
 
-    Serial.println(" Hz");
+  // -----------------------------------------
+  // MPU6500
+  // -----------------------------------------
 
-    Serial.print("Window: ");
+  if (!initMPU6500()) {
+    Serial.println("ERROR: MPU6500 NOT FOUND!");
 
-    Serial.print(WINDOW_SECONDS);
+    while (1)
+      delay(1000);
+  }
 
-    Serial.println(" seconds");
+  Serial.println("MPU6500: OK");
 
-    Serial.print("Samples/window: ");
+  // -----------------------------------------
+  // WIFI
+  // -----------------------------------------
 
-    Serial.println(NUM_SAMPLES);
+  connectWiFi();
 
-    // Initialize PPG
-
-    if (!initializePPG())
-    {
-        Serial.println(
-            "PPG initialization failed."
-        );
-
-        while (1)
-        {
-            delay(1000);
-        }
-    }
-
-    // Connect Wi-Fi
-
-    connectWiFi();
-
-    Serial.println();
-
-    Serial.println(
-        "SYSTEM READY"
-    );
+  Serial.println();
+  Serial.println("SYSTEM READY");
 }
 
 // =====================================================
-// MAIN LOOP
+// LOOP
 // =====================================================
 
-void loop()
-{
-    // Collect 8-second PPG window
+void loop() {
+  // Reconnect WiFi if necessary
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi disconnected.");
+    connectWiFi();
+  }
 
-    collectPPGWindow();
+  // -----------------------------------------
+  // Acquire 1600 samples
+  // -----------------------------------------
 
-    // Send to dashboard
+  if (acquirePPGWindow()) {
+    // -----------------------------------------
+    // Send to Render
+    // -----------------------------------------
 
-    bool success = sendPPGData();
+    bool sent = sendDataToDashboard();
 
-    if (success)
-    {
-        Serial.println();
-
-        Serial.println(
-            "PPG DATA SENT SUCCESSFULLY"
-        );
+    if (sent) {
+      Serial.println();
+      Serial.println("==========================================");
+      Serial.println("PPG DATA SENT SUCCESSFULLY");
+      Serial.println("==========================================");
+    } else {
+      Serial.println();
+      Serial.println("==========================================");
+      Serial.println("PPG DATA SEND FAILED");
+      Serial.println("==========================================");
     }
-    else
-    {
-        Serial.println();
+  }
 
-        Serial.println(
-            "PPG DATA SEND FAILED"
-        );
-    }
-
-    Serial.println();
-
-    Serial.println(
-        "Starting next acquisition..."
-    );
-
-    delay(1000);
+  Serial.println();
+  Serial.println("Starting next acquisition...");
+  delay(3000);
 }

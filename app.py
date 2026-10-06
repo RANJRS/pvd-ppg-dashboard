@@ -98,6 +98,188 @@ def receive_ppg():
         return jsonify({"error": str(e)}), 500
 
 # =====================================================
+# RAW DATASETS MANAGEMENT (/api/raw/list, label, delete)
+# =====================================================
+@app.route("/api/raw/list", methods=["GET"])
+def raw_list():
+    raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
+    os.makedirs(raw_dir, exist_ok=True)
+    files_list = []
+    for f in os.listdir(raw_dir):
+        if f.endswith('.csv'):
+            filepath = os.path.join(raw_dir, f)
+            size = os.path.getsize(filepath)
+            
+            base, _ = os.path.splitext(f)
+            parts = base.split("_")
+            if len(parts) > 1:
+                label_str = parts[-1].lower()
+                is_known = False
+                for l in ('normal', 'moderate', 'high'):
+                    if label_str.startswith(l):
+                        label_str = l
+                        is_known = True
+                        break
+                if not is_known:
+                    label_str = "unlabeled"
+                subject_id = "_".join(parts[:-1])
+            else:
+                label_str = "unlabeled"
+                subject_id = base
+                
+            files_list.append({
+                "filename": f,
+                "size_bytes": size,
+                "subject_id": subject_id,
+                "label": label_str
+            })
+    return jsonify(files_list)
+
+@app.route("/api/raw/label", methods=["POST"])
+def raw_label():
+    params = request.get_json(silent=True) or {}
+    filename = os.path.basename(params.get("filename", ""))
+    new_label = params.get("new_label", "").lower()
+    if not filename or new_label not in ('normal', 'moderate', 'high'):
+        return jsonify({"error": "Invalid request"}), 400
+    raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
+    src_path = os.path.join(raw_dir, filename)
+    if not os.path.exists(src_path):
+        return jsonify({"error": "File not found"}), 404
+
+    base, ext = os.path.splitext(filename)
+    parts = base.split("_")
+    if len(parts) > 1:
+        last_part = parts[-1].lower()
+        is_known = any(last_part.startswith(l) for l in ('normal', 'moderate', 'high'))
+        if is_known:
+            parts[-1] = new_label
+            new_filename = "_".join(parts) + ext
+        else:
+            new_filename = f"{base}_{new_label}{ext}"
+    else:
+        new_filename = f"{base}_{new_label}{ext}"
+
+    dest_path = os.path.join(raw_dir, new_filename)
+    if os.path.exists(dest_path) and dest_path != src_path:
+        counter = 1
+        while True:
+            temp_base = os.path.splitext(new_filename)[0]
+            temp_filename = f"{temp_base}_{counter}{ext}"
+            temp_path = os.path.join(raw_dir, temp_filename)
+            if not os.path.exists(temp_path):
+                new_filename = temp_filename
+                dest_path = temp_path
+                break
+            counter += 1
+
+    try:
+        os.rename(src_path, dest_path)
+        return jsonify({"status": "success", "new_filename": new_filename})
+    except Exception as e:
+        return jsonify({"error": f"Rename failed: {e}"}), 500
+
+@app.route("/api/raw/delete", methods=["POST"])
+def raw_delete():
+    params = request.get_json(silent=True) or {}
+    filename = os.path.basename(params.get("filename", ""))
+    if not filename:
+        return jsonify({"error": "Invalid filename"}), 400
+    raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
+    filepath = os.path.join(raw_dir, filename)
+    if not os.path.exists(filepath):
+        return jsonify({"error": "File not found"}), 404
+    try:
+        os.remove(filepath)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"error": f"Delete failed: {e}"}), 500
+
+@app.route("/api/download/raw", methods=["GET"])
+def download_raw():
+    import zipfile
+    raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
+    if not os.path.exists(raw_dir) or not os.listdir(raw_dir):
+        return jsonify({"error": "No raw data found"}), 404
+    mem = io.BytesIO()
+    with zipfile.ZipFile(mem, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(raw_dir):
+            for file in files:
+                if file.endswith('.csv'):
+                    zf.write(os.path.join(root, file), file)
+    mem.seek(0)
+    return send_file(mem, mimetype="application/zip", as_attachment=True, download_name="synthetic_raw_data.zip")
+
+@app.route("/api/config", methods=["GET"])
+def get_config():
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "data_preprocessing",
+            os.path.join(PIPELINE_DIR, "data_preprocessing.py")
+        )
+        dp = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(dp)
+        return jsonify({
+            "sample_rate_hz":   int(dp.FS),
+            "bandpass_low_hz":  float(dp.BANDPASS[0]),
+            "bandpass_high_hz": float(dp.BANDPASS[1]),
+            "window_seconds":   int(dp.WINDOW_SECONDS),
+            "window_samples":   int(dp.WINDOW_LEN),
+            "step_seconds":     int(dp.STEP_SECONDS),
+            "overlap_pct":      int((1 - dp.STEP_SECONDS / dp.WINDOW_SECONDS) * 100),
+            "target_arch":      "ESP32-S3 (TensorFlow Lite Micro)"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route("/api/scaler", methods=["GET"])
+def get_scaler():
+    mean_p = os.path.join(PIPELINE_DIR, "model", "scaler_mean.npy")
+    scale_p = os.path.join(PIPELINE_DIR, "model", "scaler_scale.npy")
+    if os.path.exists(mean_p) and os.path.exists(scale_p):
+        try:
+            mean = np.load(mean_p)
+            scale = np.load(scale_p)
+            feats = [
+                "PI_finger", "PI_toe", "PI_ratio", "PTT_ft",
+                "AI_finger", "AI_toe", "HRV_rmssd", "dicrotic_ratio",
+                "temp_finger", "temp_toe", "temp_diff",
+                "accel_std", "gyro_std",
+            ]
+            resp = {}
+            for i, f in enumerate(feats):
+                if i < len(mean) and i < len(scale):
+                    resp[f] = {"mean": float(mean[i]), "scale": float(scale[i])}
+            return jsonify(resp)
+        except Exception as e:
+            return jsonify({"error": str(e)})
+    return jsonify({"error": "Scaler files not found. Run train_model.py first."})
+
+@app.route("/api/model/report", methods=["GET"])
+def get_model_report():
+    report_path = os.path.join(PIPELINE_DIR, "model", "training_report.json")
+    if os.path.exists(report_path):
+        try:
+            with open(report_path, "r", encoding="utf-8") as f:
+                return jsonify(json.load(f))
+        except Exception as e:
+            return jsonify({"error": str(e)})
+    return jsonify({"error": "Report not found"})
+
+@app.route("/api/code", methods=["GET"])
+def get_code():
+    filename = request.args.get("file", "")
+    allowed = ["generate_synthetic_data.py", "data_preprocessing.py", "feature_extraction.py", "train_model.py", "convert_to_tflite.py"]
+    if filename not in allowed:
+        return jsonify({"error": "Invalid or unauthorized file"}), 400
+    fp = os.path.join(PIPELINE_DIR, filename)
+    if os.path.exists(fp):
+        with open(fp, "r", encoding="utf-8") as f:
+            return f.read(), 200, {"Content-Type": "text/plain; charset=utf-8"}
+    return jsonify({"error": "File not found"}), 404
+
+# =====================================================
 # PIPELINE STATUS
 # =====================================================
 @app.route("/api/pipeline/status", methods=["GET"])

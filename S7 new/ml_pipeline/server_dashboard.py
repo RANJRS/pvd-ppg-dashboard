@@ -8,6 +8,10 @@ import subprocess
 import threading
 import base64
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PIPELINE_DIR = SCRIPT_DIR
+PORT = int(os.environ.get("PORT", 8000))
+
 # Global thread-safe state for executing pipeline scripts
 pipeline_state = {
     "status": "idle",  # "idle", "running", "success", "failed"
