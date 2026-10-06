@@ -459,15 +459,6 @@ def predict():
     if len(df) < 1600:
         return jsonify({"error": "Need at least 1600 samples (8 sec at 200 Hz)"}), 400
 
-    saved_filename = None
-    if save_dataset:
-        raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
-        os.makedirs(raw_dir, exist_ok=True)
-        safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in subject_id)
-        lbl = clinician_label.lower() if clinician_label.lower() in ("normal", "moderate", "high") else "normal"
-        saved_filename = f"{safe}_{lbl}.csv"
-        df.to_csv(os.path.join(raw_dir, saved_filename), index=False)
-
     try:
         sos = dp.design_bandpass()
         windows = dp.segment_windows(df, sos, label=0, subject_id=subject_id)
@@ -581,6 +572,21 @@ def predict():
 
     avg_probs = np.mean(probs, axis=0).tolist()
     final_risk = int(np.argmax(avg_probs))
+    predicted_label = label_names[final_risk].lower()
+
+    saved_filename = None
+    if save_dataset:
+        raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
+        os.makedirs(raw_dir, exist_ok=True)
+        safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in subject_id)
+        # If clinician explicitly selected normal, moderate, or high, use that;
+        # otherwise (auto, random, empty), auto-label with the model's predicted risk!
+        if clinician_label and clinician_label.lower() in ("normal", "moderate", "high"):
+            lbl = clinician_label.lower()
+        else:
+            lbl = predicted_label
+        saved_filename = f"{safe}_{lbl}.csv"
+        df.to_csv(os.path.join(raw_dir, saved_filename), index=False)
 
     return jsonify({
         "status": "success",
