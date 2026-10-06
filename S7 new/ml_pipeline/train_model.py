@@ -141,6 +141,18 @@ def main():
     np.save(os.path.join(args.out, "scaler_mean.npy"),  scaler.mean_)
     np.save(os.path.join(args.out, "scaler_scale.npy"), scaler.scale_)
 
+    # Save lightweight numpy weights for zero-overhead deployment & fallback
+    try:
+        dense_layers = [l for l in model.layers if "dense" in l.name.lower()]
+        w1, b1 = dense_layers[0].get_weights()
+        w2, b2 = dense_layers[1].get_weights()
+        w3, b3 = dense_layers[2].get_weights()
+        np.savez(os.path.join(args.out, "model_weights.npz"), w1=w1, b1=b1, w2=w2, b2=b2, w3=w3, b3=b3)
+        print(f"Exported model_weights.npz to {args.out}/")
+    except Exception as e:
+        print(f"Warning: could not export model_weights.npz: {e}")
+
+
     # Save training report JSON for the dashboard to read dynamically
     report = {
         "accuracy": float(cr.get("accuracy", 0)),
@@ -182,7 +194,7 @@ def main():
         os.makedirs(backup_dir, exist_ok=True)
 
         # Files in model/ folder to backup
-        model_files = ["model.h5", "scaler_mean.npy", "scaler_scale.npy", "training_report.json"]
+        model_files = ["model.h5", "model_weights.npz", "scaler_mean.npy", "scaler_scale.npy", "training_report.json"]
         for fn in model_files:
             src = os.path.join(args.out, fn)
             if os.path.exists(src):

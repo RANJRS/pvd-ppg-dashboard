@@ -455,12 +455,14 @@ def predict():
     if len(df) < 1600:
         return jsonify({"error": "Need at least 1600 samples (8 sec at 200 Hz)"}), 400
 
+    saved_filename = None
     if save_dataset:
         raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
         os.makedirs(raw_dir, exist_ok=True)
         safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in subject_id)
         lbl = clinician_label.lower() if clinician_label.lower() in ("normal", "moderate", "high") else "normal"
-        df.to_csv(os.path.join(raw_dir, f"{safe}_{lbl}.csv"), index=False)
+        saved_filename = f"{safe}_{lbl}.csv"
+        df.to_csv(os.path.join(raw_dir, saved_filename), index=False)
 
     try:
         sos = dp.design_bandpass()
@@ -471,24 +473,83 @@ def predict():
     if not windows:
         return jsonify({"error": "No windows extracted"}), 400
 
+    feature_names = [
+        "PI_finger", "PI_toe", "PI_ratio", "PTT_ft",
+        "AI_finger", "AI_toe", "HRV_rmssd", "dicrotic_ratio",
+        "temp_finger", "temp_toe", "temp_diff",
+        "accel_std", "gyro_std"
+    ]
+
     features_list = []
     window_start_times = []
+    window_features_dict = []
     for win in windows:
         try:
             feats = fe.extract_features_row(win)
             features_list.append(feats)
             window_start_times.append(win["window_start_ms"])
+            f_dict = {k: float(v) for k, v in zip(feature_names, feats)}
+            window_features_dict.append(f_dict)
         except Exception as e:
             return jsonify({"error": f"Feature extraction failed: {e}"}), 500
 
     with _model_lock:
         if _model is None:
             try:
-                import tensorflow as tf
+                npz_path = os.path.join(PIPELINE_DIR, "model", "model_weights.npz")
                 model_path = os.path.join(PIPELINE_DIR, "model", "model.h5")
-                if not os.path.exists(model_path):
+                if os.path.exists(npz_path):
+                    data = np.load(npz_path)
+                    class MLPPredictor:
+                        def __init__(self, w1, b1, w2, b2, w3, b3):
+                            self.w1, self.b1 = w1, b1
+                            self.w2, self.b2 = w2, b2
+                            self.w3, self.b3 = w3, b3
+                        def predict(self, X):
+                            X = np.asarray(X, dtype=np.float32)
+                            h1 = np.maximum(0, np.dot(X, self.w1) + self.b1)
+                            h2 = np.maximum(0, np.dot(h1, self.w2) + self.b2)
+                            logits = np.dot(h2, self.w3) + self.b3
+                            exp_l = np.exp(logits - np.max(logits, axis=-1, keepdims=True))
+                            return exp_l / np.sum(exp_l, axis=-1, keepdims=True)
+                    _model = MLPPredictor(data['w1'], data['b1'], data['w2'], data['b2'], data['w3'], data['b3'])
+                elif os.path.exists(model_path):
+                    try:
+                        import h5py
+                        with h5py.File(model_path, "r") as f:
+                            w1 = f['model_weights/dense/sequential/dense/kernel'][:]
+                            b1 = f['model_weights/dense/sequential/dense/bias'][:]
+                            w2 = f['model_weights/dense_1/sequential/dense_1/kernel'][:]
+                            b2 = f['model_weights/dense_1/sequential/dense_1/bias'][:]
+                            w3 = f['model_weights/dense_2/sequential/dense_2/kernel'][:]
+                            b3 = f['model_weights/dense_2/sequential/dense_2/bias'][:]
+                        class MLPPredictor:
+                            def __init__(self, w1, b1, w2, b2, w3, b3):
+                                self.w1, self.b1 = w1, b1
+                                self.w2, self.b2 = w2, b2
+                                self.w3, self.b3 = w3, b3
+                            def predict(self, X):
+                                X = np.asarray(X, dtype=np.float32)
+                                h1 = np.maximum(0, np.dot(X, self.w1) + self.b1)
+                                h2 = np.maximum(0, np.dot(h1, self.w2) + self.b2)
+                                logits = np.dot(h2, self.w3) + self.b3
+                                exp_l = np.exp(logits - np.max(logits, axis=-1, keepdims=True))
+                                return exp_l / np.sum(exp_l, axis=-1, keepdims=True)
+                        _model = MLPPredictor(w1, b1, w2, b2, w3, b3)
+                    except Exception:
+                        import tensorflow as tf
+                        try:
+                            _model = tf.keras.models.load_model(model_path)
+                        except Exception:
+                            _model = tf.keras.Sequential([
+                                tf.keras.layers.Input(shape=(13,)),
+                                tf.keras.layers.Dense(16, activation="relu"),
+                                tf.keras.layers.Dense(8, activation="relu"),
+                                tf.keras.layers.Dense(3, activation="softmax"),
+                            ])
+                            _model.load_weights(model_path)
+                else:
                     return jsonify({"error": "Model not trained yet. Run the ML pipeline first."}), 400
-                _model = tf.keras.models.load_model(model_path)
             except Exception as e:
                 return jsonify({"error": f"Model load failed: {e}"}), 500
         if _scaler_mean is None:
@@ -508,6 +569,7 @@ def predict():
         results.append({
             "window_index": i,
             "window_start_ms": float(window_start_times[i]),
+            "features": window_features_dict[i],
             "probabilities": [float(p) for p in wp],
             "risk_level": int(np.argmax(wp)),
             "risk_name": label_names[int(np.argmax(wp))]
@@ -523,7 +585,9 @@ def predict():
             "total_windows": len(results),
             "average_probabilities": avg_probs,
             "final_risk_level": final_risk,
-            "final_risk_name": label_names[final_risk]
+            "final_risk_name": label_names[final_risk],
+            "saved": bool(save_dataset and saved_filename),
+            "saved_filename": saved_filename
         }
     })
 

@@ -1795,7 +1795,7 @@ function displayPredictionReport(report) {
     let sumAif=0, sumAit=0, sumHrv=0, sumDicr=0;
     
     windows.forEach(w => {
-        const f = w.features;
+        const f = w.features || {};
         sumPif   += f.PI_finger       || 0;
         sumPit   += f.PI_toe          || 0;
         sumPir   += f.PI_ratio        || 0;
