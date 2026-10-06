@@ -1692,8 +1692,8 @@ function startRecording() {
         elapsed = Math.floor((Date.now() - recordStartTime) / 1000);
         document.getElementById("rec-count").innerText = elapsed;
         
-        // Auto-stop after 40 seconds to prevent huge storage leaks
-        if (elapsed >= 40) {
+        // Auto-stop exactly after 15 seconds
+        if (elapsed >= 15) {
             stopRecording();
         }
     }, 1000);
