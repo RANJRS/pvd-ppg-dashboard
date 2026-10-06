@@ -204,6 +204,50 @@ def raw_delete():
     except Exception as e:
         return jsonify({"error": f"Delete failed: {e}"}), 500
 
+@app.route("/api/raw/delete_batch", methods=["POST"])
+def raw_delete_batch():
+    params = request.get_json(silent=True) or {}
+    filenames = params.get("filenames", [])
+    if not filenames:
+        return jsonify({"error": "No filenames provided"}), 400
+    raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
+    deleted = []
+    errors = []
+    for fn in filenames:
+        safe_fn = os.path.basename(fn)
+        if safe_fn.endswith(".csv"):
+            fp = os.path.join(raw_dir, safe_fn)
+            if os.path.exists(fp):
+                try:
+                    os.remove(fp)
+                    deleted.append(safe_fn)
+                except Exception as e:
+                    errors.append(f"{safe_fn}: {str(e)}")
+    return jsonify({"status": "success", "deleted_count": len(deleted), "errors": errors})
+
+@app.route("/api/raw/delete_all", methods=["POST"])
+def raw_delete_all():
+    raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
+    deleted = 0
+    if os.path.exists(raw_dir):
+        for f in os.listdir(raw_dir):
+            if f.endswith(".csv"):
+                try:
+                    os.remove(os.path.join(raw_dir, f))
+                    deleted += 1
+                except Exception:
+                    pass
+    return jsonify({"status": "success", "deleted_count": deleted})
+
+@app.route("/api/raw/download/<path:filename>", methods=["GET"])
+def download_single_raw(filename):
+    safe_fn = os.path.basename(filename)
+    raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
+    fp = os.path.join(raw_dir, safe_fn)
+    if os.path.exists(fp) and safe_fn.endswith(".csv"):
+        return send_file(fp, mimetype="text/csv", as_attachment=True, download_name=safe_fn)
+    return jsonify({"error": "File not found"}), 404
+
 @app.route("/api/download/raw", methods=["GET"])
 def download_raw():
     import zipfile

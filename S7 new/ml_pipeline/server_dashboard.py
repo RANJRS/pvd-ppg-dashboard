@@ -893,11 +893,71 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": f"Delete failed: {str(e)}"}).encode('utf-8'))
             return
 
+        if parsed_path == '/api/raw/delete_batch':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            params = json.loads(post_data.decode('utf-8'))
+            filenames = params.get("filenames", [])
+            raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
+            deleted = []
+            errors = []
+            for fn in filenames:
+                safe_fn = os.path.basename(fn)
+                if safe_fn.endswith('.csv'):
+                    fp = os.path.join(raw_dir, safe_fn)
+                    if os.path.exists(fp):
+                        try:
+                            os.remove(fp)
+                            deleted.append(safe_fn)
+                        except Exception as e:
+                            errors.append(f"{safe_fn}: {str(e)}")
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "success", "deleted_count": len(deleted), "errors": errors}).encode('utf-8'))
+            return
+
+        if parsed_path == '/api/raw/delete_all':
+            raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
+            deleted = 0
+            if os.path.exists(raw_dir):
+                for f in os.listdir(raw_dir):
+                    if f.endswith('.csv'):
+                        try:
+                            os.remove(os.path.join(raw_dir, f))
+                            deleted += 1
+                        except Exception:
+                            pass
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "success", "deleted_count": deleted}).encode('utf-8'))
+            return
+
         self.send_error(404, f"API endpoint not found: {self.path}")
 
     def do_GET(self):
         from urllib.parse import urlparse
         parsed_path = urlparse(self.path).path
+
+        if parsed_path.startswith('/api/raw/download/'):
+            filename = os.path.basename(parsed_path.replace('/api/raw/download/', ''))
+            raw_dir = os.path.join(PIPELINE_DIR, "data", "raw")
+            fp = os.path.join(raw_dir, filename)
+            if os.path.exists(fp) and filename.endswith('.csv'):
+                self.send_response(200)
+                self.send_header('Content-type', 'text/csv')
+                self.send_header('Content-Disposition', f'attachment; filename="{filename}"')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                with open(fp, 'rb') as f:
+                    self.wfile.write(f.read())
+                return
+            else:
+                self.send_error(404, "File not found")
+                return
 
         # Redirect / to serve dashboard.html
         if parsed_path == '/' or parsed_path == '':

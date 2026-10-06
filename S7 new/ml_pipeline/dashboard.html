@@ -454,31 +454,42 @@
 
                 <!-- Acquired Raw Datasets Management Card -->
                 <div class="card glass-card full-width-card" style="margin-top: 24px;">
-                    <div class="card-header flex-between">
-                        <h3>📂 Manage & Label Acquired Datasets</h3>
-                        <button class="btn btn-secondary" onclick="loadRawDatasets()" style="padding: 6px 12px; font-size: 0.8rem;">🔄 Refresh List</button>
+                    <div class="card-header flex-between" style="flex-wrap: wrap; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <h3>📂 Manage & Label Acquired Datasets</h3>
+                            <span id="selected-datasets-badge" style="display: none; background: rgba(6, 182, 212, 0.15); color: var(--color-cyan); border: 1px solid rgba(6, 182, 212, 0.3); padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">0 selected</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <button class="btn btn-secondary" id="btn-batch-share" onclick="shareSelectedDatasets()" style="display: none; padding: 6px 12px; font-size: 0.8rem; background-color: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4);">🔗 Share Selected</button>
+                            <button class="btn btn-secondary" id="btn-batch-delete" onclick="openBatchDeleteModal()" style="display: none; padding: 6px 12px; font-size: 0.8rem; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🗑️ Delete Selected</button>
+                            <button class="btn btn-secondary" id="btn-delete-all" onclick="openDeleteAllModal()" style="padding: 6px 12px; font-size: 0.8rem; background-color: rgba(244, 63, 94, 0.15); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.3);">🗑️ Delete All</button>
+                            <button class="btn btn-secondary" onclick="loadRawDatasets()" style="padding: 6px 12px; font-size: 0.8rem;">🔄 Refresh List</button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px;">
                             Below are the raw data sessions recorded from the ESP32 or uploaded manually.
-                            You can change their clinician/diagnostic label (Normal, Moderate, High) or delete them. Correct labelling is required for the ML Preprocessing Pipeline.
+                            You can change their clinician/diagnostic label (Normal, Moderate, High), share direct links, or delete them in batch.
                         </p>
-                        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+                        <div class="table-container" style="max-height: 420px; overflow-y: auto;">
                             <table class="data-table compact" id="raw-datasets-table">
                                 <thead>
                                     <tr>
+                                        <th style="width: 38px; text-align: center;">
+                                            <input type="checkbox" id="chk-select-all" onchange="toggleSelectAllDatasets(this.checked)" title="Select All" style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--color-cyan); vertical-align: middle;">
+                                        </th>
                                         <th>Filename</th>
                                         <th>Subject ID</th>
                                         <th>Captured Timestamp</th>
                                         <th>Size</th>
                                         <th>Clinician Label</th>
                                         <th>Re-label Action</th>
-                                        <th>Delete</th>
+                                        <th style="text-align: center;">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="raw-datasets-list">
                                     <tr>
-                                        <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 24px;">Loading raw datasets...</td>
+                                        <td colspan="8" style="text-align: center; color: var(--text-secondary); padding: 24px;">Loading raw datasets...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -801,20 +812,57 @@
         </main>
     </div>
 
-    <!-- Confirm Delete Modal -->
+    <!-- Confirm Delete Modal (Single, Batch, All) -->
     <div id="delete-confirm-modal" class="modal-overlay" onclick="closeDeleteModal(event)">
-        <div class="modal-content glass-card" style="max-width: 450px; border: 1px solid rgba(244, 63, 94, 0.2);" onclick="event.stopPropagation()">
-            <div class="modal-header" style="border-bottom: 1px solid rgba(244, 63, 94, 0.1);">
-                <h3>🗑️ Delete Raw Dataset</h3>
+        <div class="modal-content glass-card" style="max-width: 460px; border: 1px solid rgba(244, 63, 94, 0.25);" onclick="event.stopPropagation()">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(244, 63, 94, 0.15);">
+                <h3 id="delete-modal-title">🗑️ Delete Raw Dataset</h3>
                 <button class="modal-close-btn" onclick="closeDeleteModal()">×</button>
             </div>
             <div class="modal-body" style="padding-top: 16px;">
-                <p>Are you sure you want to permanently delete the raw dataset <strong id="delete-modal-filename" style="color: var(--color-rose);"></strong> from the server?</p>
+                <p id="delete-modal-message">Are you sure you want to permanently delete the raw dataset <strong id="delete-modal-filename" style="color: var(--color-rose);"></strong> from the server?</p>
                 <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 8px;">This action is destructive and cannot be undone.</p>
             </div>
             <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 16px;">
                 <button class="btn btn-secondary" onclick="closeDeleteModal()" style="padding: 8px 16px;">Cancel</button>
-                <button class="btn btn-danger" onclick="confirmDeleteDataset()" style="background-color: var(--color-rose); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: 'Inter', sans-serif;">Confirm Delete</button>
+                <button class="btn btn-danger" id="btn-modal-confirm-delete" onclick="executeDeleteAction()" style="background-color: var(--color-rose); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: 'Inter', sans-serif;">Confirm Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Dataset Modal -->
+    <div id="share-modal" class="modal-overlay" onclick="closeShareModal(event)">
+        <div class="modal-content glass-card" style="max-width: 480px; border: 1px solid rgba(6, 182, 212, 0.3);" onclick="event.stopPropagation()">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(6, 182, 212, 0.15);">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.25rem;">🔗</span>
+                    <h3 id="share-modal-title">Share Dataset</h3>
+                </div>
+                <button class="modal-close-btn" onclick="closeShareModal()">×</button>
+            </div>
+            <div class="modal-body" style="padding-top: 16px; display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                    <span style="font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Dataset Filename</span>
+                    <p id="share-modal-filename" style="font-family: monospace; font-size: 0.95rem; color: var(--color-cyan); margin-top: 4px; word-break: break-all;"></p>
+                </div>
+                <div>
+                    <span style="font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Direct Download & Share Link</span>
+                    <div style="display: flex; gap: 8px; margin-top: 6px;">
+                        <input type="text" id="share-modal-link-input" readonly style="flex: 1; padding: 8px 12px; font-size: 0.8rem; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
+                        <button class="btn btn-secondary" id="btn-copy-share-link" onclick="copyShareModalLink()" style="padding: 8px 14px; font-size: 0.8rem; background: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4); white-space: nowrap; cursor: pointer;">📋 Copy</button>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 4px;">
+                    <button class="btn btn-secondary" id="btn-native-share" onclick="triggerNativeShare()" style="flex: 1; padding: 9px; font-size: 0.85rem; background: rgba(255, 255, 255, 0.05); color: var(--text-primary); border-color: var(--border-color); display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
+                        <span>📲</span> Share via App
+                    </button>
+                    <a id="btn-share-direct-download" href="#" class="btn btn-secondary" download style="flex: 1; padding: 9px; font-size: 0.85rem; background: rgba(16, 185, 129, 0.15); color: var(--color-emerald); border-color: rgba(16, 185, 129, 0.3); text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
+                        <span>📥</span> Download CSV
+                    </a>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+                <button class="btn btn-secondary" onclick="closeShareModal()" style="padding: 6px 16px; cursor: pointer;">Close</button>
             </div>
         </div>
     </div>

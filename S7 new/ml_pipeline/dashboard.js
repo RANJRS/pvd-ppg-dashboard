@@ -1927,11 +1927,12 @@ async function loadRawDatasets() {
         if (datasets.length === 0) {
             listContainer.innerHTML = `
                 <tr>
-                    <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 24px;">
+                    <td colspan="8" style="text-align: center; color: var(--text-secondary); padding: 24px;">
                         No raw acquired datasets found in <code>data/raw/</code>. Record data or upload CSVs above.
                     </td>
                 </tr>
             `;
+            updateSelectedDatasetsUI();
             return;
         }
         
@@ -1999,29 +2000,86 @@ async function loadRawDatasets() {
             
             html += `
                 <tr>
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="dataset-row-chk" value="${d.filename}" onchange="updateSelectedDatasetsUI()" style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--color-cyan); vertical-align: middle;">
+                    </td>
                     <td style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">${d.filename}</td>
                     <td><strong>${d.subject_id}</strong></td>
                     <td style="color: var(--text-secondary); font-size: 0.78rem; white-space: nowrap;">📅 ${localTimeStr}</td>
                     <td style="color: var(--text-secondary);">${sizeKB} KB</td>
                     <td><span class="pipeline-badge ${badgeClass}" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 6px;">${labelName}</span></td>
                     <td>${options}</td>
-                    <td>
-                        <button class="btn btn-secondary" onclick="openDeleteModal('${d.filename}')" style="background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.3); padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; cursor: pointer;">🗑️ Delete</button>
+                    <td style="text-align: center;">
+                        <div style="display: flex; gap: 6px; justify-content: center; align-items: center;">
+                            <button class="btn btn-secondary" onclick="openShareModal('${d.filename}', '${d.subject_id}')" style="padding: 4px 8px; font-size: 0.75rem; border-color: rgba(6, 182, 212, 0.4); color: var(--color-cyan); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;" title="Share Dataset">🔗 Share</button>
+                            <button class="btn btn-secondary" onclick="openDeleteModal('${d.filename}')" style="background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.3); padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;" title="Delete Dataset">🗑️ Delete</button>
+                        </div>
                     </td>
                 </tr>
             `;
         });
         
         listContainer.innerHTML = html;
+        updateSelectedDatasetsUI();
     } catch (e) {
         console.error("Error loading raw datasets:", e);
         listContainer.innerHTML = `
             <tr>
-                <td colspan="7" style="text-align: center; color: var(--color-rose); padding: 24px;">
+                <td colspan="8" style="text-align: center; color: var(--color-rose); padding: 24px;">
                     Error loading raw datasets list: ${e.message}
                 </td>
             </tr>
         `;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DATASET SELECTION HELPERS
+// ---------------------------------------------------------------------------
+function toggleSelectAllDatasets(selectAll) {
+    const checkboxes = document.querySelectorAll(".dataset-row-chk");
+    checkboxes.forEach(cb => { cb.checked = selectAll; });
+    updateSelectedDatasetsUI();
+}
+
+function getSelectedDatasetFilenames() {
+    const checkboxes = document.querySelectorAll(".dataset-row-chk:checked");
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function updateSelectedDatasetsUI() {
+    const selected = getSelectedDatasetFilenames();
+    const count = selected.length;
+    const allCheckboxes = document.querySelectorAll(".dataset-row-chk");
+    const total = allCheckboxes.length;
+    
+    const badge = document.getElementById("selected-datasets-badge");
+    const btnBatchShare = document.getElementById("btn-batch-share");
+    const btnBatchDelete = document.getElementById("btn-batch-delete");
+    const masterChk = document.getElementById("chk-select-all");
+    
+    if (masterChk) {
+        masterChk.checked = total > 0 && count === total;
+        masterChk.indeterminate = count > 0 && count < total;
+    }
+    
+    if (count > 0) {
+        if (badge) {
+            badge.style.display = "inline-block";
+            badge.innerText = `${count} selected`;
+        }
+        if (btnBatchShare) {
+            btnBatchShare.style.display = "inline-block";
+            btnBatchShare.innerText = `🔗 Share Selected (${count})`;
+        }
+        if (btnBatchDelete) {
+            btnBatchDelete.style.display = "inline-block";
+            btnBatchDelete.innerText = `🗑️ Delete Selected (${count})`;
+        }
+    } else {
+        if (badge) badge.style.display = "none";
+        if (btnBatchShare) btnBatchShare.style.display = "none";
+        if (btnBatchDelete) btnBatchDelete.style.display = "none";
     }
 }
 
@@ -2044,7 +2102,6 @@ async function reLabelDataset(filename, newLabel) {
             const result = await res.json();
             console.log(`[Dashboard] Re-labelled ${filename} to ${result.new_filename}`);
             await loadRawDatasets();
-            // Also refresh overall pipeline stats/Overview charts
             reloadData();
         } else {
             const err = await res.json();
@@ -2056,49 +2113,175 @@ async function reLabelDataset(filename, newLabel) {
     }
 }
 
-// Delete modal state
-let pendingDeleteFilename = "";
+// ---------------------------------------------------------------------------
+// DELETION MODAL & ACTIONS (Single, Batch, All)
+// ---------------------------------------------------------------------------
+let deleteMode = "single"; // "single" | "batch" | "all"
+let pendingDeleteTarget = null; // string for single, array for batch, null for all
 
 function openDeleteModal(filename) {
-    pendingDeleteFilename = filename;
-    document.getElementById("delete-modal-filename").innerText = filename;
+    deleteMode = "single";
+    pendingDeleteTarget = filename;
+    document.getElementById("delete-modal-title").innerText = "🗑️ Delete Raw Dataset";
+    document.getElementById("delete-modal-message").innerHTML = `Are you sure you want to permanently delete the raw dataset <strong style="color: var(--color-rose);">${filename}</strong> from the server?`;
+    document.getElementById("delete-confirm-modal").style.display = "flex";
+}
+
+function openBatchDeleteModal() {
+    const selected = getSelectedDatasetFilenames();
+    if (selected.length === 0) {
+        alert("Please select at least one dataset to delete.");
+        return;
+    }
+    deleteMode = "batch";
+    pendingDeleteTarget = selected;
+    document.getElementById("delete-modal-title").innerText = `🗑️ Delete ${selected.length} Selected Datasets`;
+    document.getElementById("delete-modal-message").innerHTML = `Are you sure you want to permanently delete <strong style="color: var(--color-rose);">${selected.length} selected dataset(s)</strong> from the server?`;
+    document.getElementById("delete-confirm-modal").style.display = "flex";
+}
+
+function openDeleteAllModal() {
+    deleteMode = "all";
+    pendingDeleteTarget = null;
+    document.getElementById("delete-modal-title").innerText = "⚠️ Delete ALL Raw Datasets";
+    document.getElementById("delete-modal-message").innerHTML = `Are you sure you want to permanently delete <strong style="color: var(--color-rose);">ALL raw datasets</strong> in the pool? This will wipe all recorded sessions and cannot be undone.`;
     document.getElementById("delete-confirm-modal").style.display = "flex";
 }
 
 function closeDeleteModal(e) {
     if (e && e.target !== e.currentTarget) return;
     document.getElementById("delete-confirm-modal").style.display = "none";
-    pendingDeleteFilename = "";
+    pendingDeleteTarget = null;
 }
 
-// Confirm deletion of dataset from the custom modal
-async function confirmDeleteDataset() {
-    if (!pendingDeleteFilename) return;
-    const filename = pendingDeleteFilename;
+async function executeDeleteAction() {
     closeDeleteModal();
-    
+    const btnConfirm = document.getElementById("btn-modal-confirm-delete");
+    if (btnConfirm) btnConfirm.disabled = true;
+
     try {
-        const res = await fetch("/api/raw/delete", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                filename: filename
-            })
-        });
-        
-        if (res.ok) {
-            console.log(`[Dashboard] Deleted ${filename}`);
+        let res;
+        if (deleteMode === "single") {
+            res = await fetch("/api/raw/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename: pendingDeleteTarget })
+            });
+        } else if (deleteMode === "batch") {
+            res = await fetch("/api/raw/delete_batch", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filenames: pendingDeleteTarget })
+            });
+        } else if (deleteMode === "all") {
+            res = await fetch("/api/raw/delete_all", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({})
+            });
+        }
+
+        if (res && res.ok) {
+            const data = await res.json();
+            console.log("[Dashboard] Delete success:", data);
             await loadRawDatasets();
-            // Also refresh overall pipeline stats/Overview charts
             reloadData();
         } else {
             const err = await res.json();
-            alert(`Failed to delete dataset: ${err.error || "Unknown server error"}`);
+            alert(`Failed to delete: ${err.error || "Unknown server error"}`);
         }
     } catch (e) {
-        console.error("Error deleting dataset:", e);
-        alert(`Error deleting dataset: ${e.message}`);
+        console.error("Error executing delete:", e);
+        alert(`Error executing delete: ${e.message}`);
+    } finally {
+        if (btnConfirm) btnConfirm.disabled = false;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SHARE MODAL & ACTIONS
+// ---------------------------------------------------------------------------
+let currentShareData = { filename: "", subjectId: "", url: "" };
+
+function openShareModal(filename, subjectId) {
+    const origin = window.location.origin;
+    const downloadUrl = `${origin}/api/raw/download/${encodeURIComponent(filename)}`;
+    currentShareData = { filename, subjectId, url: downloadUrl };
+    
+    document.getElementById("share-modal-title").innerText = `Share: ${subjectId || filename}`;
+    document.getElementById("share-modal-filename").innerText = filename;
+    document.getElementById("share-modal-link-input").value = downloadUrl;
+    document.getElementById("btn-share-direct-download").href = downloadUrl;
+    document.getElementById("btn-copy-share-link").innerText = "📋 Copy";
+    document.getElementById("share-modal").style.display = "flex";
+}
+
+function closeShareModal(e) {
+    if (e && e.target !== e.currentTarget) return;
+    document.getElementById("share-modal").style.display = "none";
+}
+
+async function copyShareModalLink() {
+    const input = document.getElementById("share-modal-link-input");
+    const btn = document.getElementById("btn-copy-share-link");
+    try {
+        await navigator.clipboard.writeText(input.value);
+        btn.innerText = "✅ Copied!";
+        setTimeout(() => { btn.innerText = "📋 Copy"; }, 2000);
+    } catch (_) {
+        input.select();
+        document.execCommand("copy");
+        btn.innerText = "✅ Copied!";
+        setTimeout(() => { btn.innerText = "📋 Copy"; }, 2000);
+    }
+}
+
+async function triggerNativeShare() {
+    const title = `PVD Dataset: ${currentShareData.subjectId || currentShareData.filename}`;
+    const text = `Raw physiological PPG session recorded for ${currentShareData.subjectId}: ${currentShareData.filename}`;
+    const url = currentShareData.url;
+    
+    if (navigator.share) {
+        try {
+            await navigator.share({ title, text, url });
+        } catch (err) {
+            if (err.name !== "AbortError") {
+                copyShareModalLink();
+            }
+        }
+    } else {
+        copyShareModalLink();
+        alert("Direct link copied to clipboard! You can paste and share it with clinicians.");
+    }
+}
+
+async function shareSelectedDatasets() {
+    const selected = getSelectedDatasetFilenames();
+    if (selected.length === 0) return;
+    const origin = window.location.origin;
+    
+    if (selected.length === 1) {
+        openShareModal(selected[0], "");
+        return;
+    }
+    
+    const links = selected.map(fn => `${origin}/api/raw/download/${encodeURIComponent(fn)}`).join("\n");
+    const shareText = `PVD Datasets (${selected.length} sessions):\n` + links;
+    
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: `PVD Datasets (${selected.length} files)`,
+                text: shareText
+            });
+            return;
+        } catch (_) {}
+    }
+    
+    try {
+        await navigator.clipboard.writeText(shareText);
+        alert(`Copied direct download links for ${selected.length} datasets to clipboard!`);
+    } catch (_) {
+        prompt("Copy dataset links below:", shareText);
     }
 }
