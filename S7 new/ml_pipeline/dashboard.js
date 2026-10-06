@@ -1154,10 +1154,10 @@ function initEsp32LiveChart() {
     const violetColor = colors.getPropertyValue("--color-violet").trim() || '#8b5cf6';
     const cyanColor = colors.getPropertyValue("--color-cyan").trim() || '#06b6d4';
     
-    // Pre-populate with empty values for rolling effect
-    liveChartTimestamps = Array.from({length: 400}, (_, i) => -2.0 + (i * 0.005));
-    liveChartDataFinger = Array.from({length: 400}, () => null);
-    liveChartDataToe = Array.from({length: 400}, () => null);
+    // Initialize empty buffers (starts cleanly when data arrives)
+    liveChartTimestamps = [];
+    liveChartDataFinger = [];
+    liveChartDataToe = [];
     
     esp32LiveChart = new Chart(ctx.getContext("2d"), {
         type: 'line',
@@ -1456,6 +1456,10 @@ function setEsp32ConnectedState(mode) {
     const startRecBtn = document.getElementById("btn-rec-start");
     if (startRecBtn) startRecBtn.disabled = false;
     
+    liveChartTimestamps = [];
+    liveChartDataFinger = [];
+    latestGyroData = { gx: 0, gy: 0, gz: 0, valid: false };
+    
     const overlay = document.getElementById("chart-overlay-message");
     if (overlay) {
         overlay.style.opacity = "0";
@@ -1533,10 +1537,7 @@ function parseSerialLine(line) {
                 gz = parseFloat(parts[5]);
             }
             if (gx !== undefined && !isNaN(gx) && !isNaN(gy) && !isNaN(gz)) {
-                const gyroEl = document.getElementById("esp32-imu-gyro");
-                if (gyroEl) {
-                    gyroEl.innerText = `${gx.toFixed(1)}, ${gy.toFixed(1)}, ${gz.toFixed(1)} °/s`;
-                }
+                latestGyroData = { gx, gy, gz, valid: true };
             }
         }
         return;
@@ -1554,109 +1555,85 @@ function parseSerialLine(line) {
     }
 }
 
+let liveChartRenderPending = false;
+let latestGyroData = { gx: 0, gy: 0, gz: 0, valid: false };
+
 // Handle Incoming sample (simulated or serial)
 function handleIncomingSample(ts, finger, toe) {
     packetCount++;
-    const packetText = document.getElementById("esp32-packet-count");
-    if (packetText) packetText.innerText = packetCount;
     
-    // Update live scrolling chart
-    updateLiveChart(ts, finger, toe);
+    // Push directly to rolling buffers
+    liveChartDataFinger.push(finger);
+    liveChartTimestamps.push(ts / 1000.0);
     
-    // If recording, store sample
-    if (isRecording) {
-        const sample = {
-            timestamp_ms: ts,
-            ir_finger:    finger,
-            ir_toe:       toe
-        };
-        recordedSamples.push(sample);
-    }
-}
-
-// Live BLE features notifications handler (8-float = 32-byte packet)
-function handleBleFeaturesChanged(event) {
-    const value = event.target.value;
-    // 8 floats = 32 bytes
-    if (value.byteLength < 32) return;
-    
-    const view = new DataView(value.buffer);
-    const features = [];
-    for (let i = 0; i < 8; i++) {
-        features.push(view.getFloat32(i * 4, true)); // little endian
-    }
-    
-    packetCount++;
-    const packetText = document.getElementById("esp32-packet-count");
-    if (packetText) packetText.innerText = packetCount;
-    
-    // Display features in Results table directly
-    document.getElementById("esp32-results-grid").style.display = "grid";
-    
-    // PPG features
-    document.getElementById("res-feat-pif").innerText  = features[0].toFixed(2) + "%";
-    document.getElementById("res-feat-pit").innerText  = features[1].toFixed(2) + "%";
-    document.getElementById("res-feat-pir").innerText  = features[2].toFixed(3);
-    document.getElementById("res-feat-ptt").innerText  = features[3].toFixed(1) + " ms";
-    document.getElementById("res-feat-aif").innerText  = features[4].toFixed(1) + "%";
-    document.getElementById("res-feat-ait").innerText  = features[5].toFixed(1) + "%";
-    document.getElementById("res-feat-hrv").innerText  = features[6].toFixed(1) + " ms";
-    document.getElementById("res-feat-dicr").innerText = features[7].toFixed(3);
-    
-    document.getElementById("res-save-status").innerText = "BLE Realtime (Not Saved)";
-    document.getElementById("res-save-status").style.color = "var(--color-cyan)";
-    document.getElementById("res-save-filename").innerText = "";
-}
-
-// Live BLE risk notification handler
-function handleBleRiskChanged(event) {
-    const value = event.target.value;
-    if (value.byteLength < 1) return;
-    
-    const riskVal = value.getUint8(0);
-    const riskNames = ["Normal", "Moderate", "High"];
-    const riskPctValues = [15, 55, 90]; // mock percentage visualizer for BLE risk levels
-    
-    if (riskVal >= 0 && riskVal <= 2) {
-        drawRiskGauge(riskPctValues[riskVal], riskNames[riskVal]);
-    }
-}
-
-// Live Rolling chart values update
-function updateLiveChart(timestampMs, fingerVal, toeVal) {
-    if (!esp32LiveChart) return;
-    
-    const nowS = timestampMs / 1000.0;
-    
-    liveChartDataFinger.push(fingerVal);
-    liveChartDataToe.push(toeVal);
-    liveChartTimestamps.push(nowS);
-    
-    // Keep last 4 seconds of data (4s * 200Hz = 800 samples)
-    const samplesToKeep = 800;
+    // Keep last 3 seconds (600 samples at 200 Hz)
+    const samplesToKeep = 600;
     if (liveChartDataFinger.length > samplesToKeep) {
         liveChartDataFinger.shift();
-        liveChartDataToe.shift();
         liveChartTimestamps.shift();
     }
     
-    // Normalize relative timeline on X-axis (from -4s to 0s)
+    // If recording, store sample
+    if (isRecording) {
+        recordedSamples.push({
+            timestamp_ms: ts,
+            ir_finger:    finger,
+            ir_toe:       toe
+        });
+    }
+    
+    // Schedule decoupled 60 FPS animation render
+    if (!liveChartRenderPending) {
+        liveChartRenderPending = true;
+        requestAnimationFrame(renderLiveChart);
+    }
+}
+
+// Render chart smoothly at monitor refresh rate (prevents 200/sec browser lag)
+function renderLiveChart() {
+    liveChartRenderPending = false;
+    if (!esp32LiveChart) return;
+    
+    const len = liveChartTimestamps.length;
+    if (len === 0) return;
+    
+    // 1. Throttled DOM updates
+    const packetText = document.getElementById("esp32-packet-count");
+    if (packetText) packetText.innerText = packetCount;
+    
+    if (latestGyroData.valid) {
+        const gyroEl = document.getElementById("esp32-imu-gyro");
+        if (gyroEl) {
+            gyroEl.innerText = `${latestGyroData.gx.toFixed(1)}, ${latestGyroData.gy.toFixed(1)}, ${latestGyroData.gz.toFixed(1)} °/s`;
+        }
+    }
+    
+    // 2. Relative timeline X-axis
+    const nowS = liveChartTimestamps[len - 1];
     const relativeTimes = liveChartTimestamps.map(t => t - nowS);
     
     esp32LiveChart.data.labels = relativeTimes;
     esp32LiveChart.data.datasets[0].data = liveChartDataFinger;
     
-    // Dynamic autoscaling
-    if (liveChartDataFinger.length > 50) {
-        const fingerSlice = liveChartDataFinger.filter(v => v !== null);
-        const minVal = Math.min(...fingerSlice);
-        const maxVal = Math.max(...fingerSlice);
-        const pad = (maxVal - minVal) * 0.1 || 10;
-        esp32LiveChart.options.scales.y.min = Math.floor(minVal - pad);
-        esp32LiveChart.options.scales.y.max = Math.ceil(maxVal + pad);
+    // 3. Fast O(N) min/max calculation without stack spread
+    if (liveChartDataFinger.length > 20) {
+        let minVal = Infinity;
+        let maxVal = -Infinity;
+        for (let i = 0; i < liveChartDataFinger.length; i++) {
+            const v = liveChartDataFinger[i];
+            if (v !== null && !isNaN(v)) {
+                if (v < minVal) minVal = v;
+                if (v > maxVal) maxVal = v;
+            }
+        }
+        if (minVal !== Infinity && maxVal !== -Infinity && minVal < maxVal) {
+            const pad = (maxVal - minVal) * 0.1 || 10;
+            esp32LiveChart.options.scales.y.min = Math.floor(minVal - pad);
+            esp32LiveChart.options.scales.y.max = Math.ceil(maxVal + pad);
+        }
     }
     
-    esp32LiveChart.update('none'); // Update without transition animation
+    esp32LiveChart.update('none');
 }
 
 // Download currently recorded samples in memory as a CSV file
