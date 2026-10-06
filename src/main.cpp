@@ -319,8 +319,8 @@ bool acquirePPGWindow() {
 
         sampleCount++;
 
-        // Stream real-time Finger PPG sample for Web Serial dashboard
-        Serial.printf("DATA,%lu,%lu\n", (unsigned long)millis(), (unsigned long)irValue);
+        // Stream real-time Finger PPG + Gyro (gx,gy,gz) for Web Serial dashboard
+        Serial.printf("DATA,%lu,%lu,%.2f,%.2f,%.2f\n", (unsigned long)millis(), (unsigned long)irValue, gx, gy, gz);
 
         // Progress
         if (sampleCount % 200 == 0) {

@@ -1412,6 +1412,9 @@ function disconnectESP32() {
     const dataRateText = document.getElementById("esp32-data-rate");
     if (dataRateText) dataRateText.innerText = "--";
     
+    const gyroText = document.getElementById("esp32-imu-gyro");
+    if (gyroText) gyroText.innerText = "--";
+    
     const connectBtn = document.getElementById("btn-esp32-connect");
     if (connectBtn) connectBtn.disabled = false;
     
@@ -1520,6 +1523,20 @@ function parseSerialLine(line) {
             const toe    = parts.length >= 4 ? parseFloat(parts[3]) : finger;
             if (!isNaN(ts) && !isNaN(finger)) {
                 handleIncomingSample(ts, finger, toe);
+            }
+            
+            // Parse Gyro (gx, gy, gz) if provided
+            let gx, gy, gz;
+            if (parts.length >= 6) {
+                gx = parseFloat(parts[3]);
+                gy = parseFloat(parts[4]);
+                gz = parseFloat(parts[5]);
+            }
+            if (gx !== undefined && !isNaN(gx) && !isNaN(gy) && !isNaN(gz)) {
+                const gyroEl = document.getElementById("esp32-imu-gyro");
+                if (gyroEl) {
+                    gyroEl.innerText = `${gx.toFixed(1)}, ${gy.toFixed(1)}, ${gz.toFixed(1)} °/s`;
+                }
             }
         }
         return;
