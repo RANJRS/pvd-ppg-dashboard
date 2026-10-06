@@ -1,5 +1,9 @@
 #include "MAX30105.h"
 #include <Arduino.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -14,6 +18,87 @@ const char *WIFI_PASSWORD = "12345678";
 
 // Your Render API
 const char *SERVER_URL = "https://pvd-ppg-dashboard.onrender.com";
+
+// =====================================================
+// BLE SETTINGS (Nordic UART Service standard)
+// =====================================================
+#define BLE_DEVICE_NAME        "PVD-Patch"
+#define SERVICE_UUID           "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+#define CHARACTERISTIC_UUID_RX "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+#define CHARACTERISTIC_UUID_TX "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+
+BLEServer *pServer = nullptr;
+BLECharacteristic *pTxCharacteristic = nullptr;
+bool deviceConnected = false;
+bool oldDeviceConnected = false;
+
+class MyServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer *pServer) override {
+    deviceConnected = true;
+    Serial.println("[BLE] Client Connected!");
+  }
+
+  void onDisconnect(BLEServer *pServer) override {
+    deviceConnected = false;
+    Serial.println("[BLE] Client Disconnected!");
+  }
+};
+
+class MyRxCallbacks : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic *pCharacteristic) override {
+    String rxValue = pCharacteristic->getValue().c_str();
+    if (rxValue.length() > 0) {
+      Serial.print("[BLE RX]: ");
+      Serial.println(rxValue);
+    }
+  }
+};
+
+void initBLE() {
+  BLEDevice::init(BLE_DEVICE_NAME);
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+
+  pTxCharacteristic = pService->createCharacteristic(
+      CHARACTERISTIC_UUID_TX,
+      BLECharacteristic::PROPERTY_NOTIFY
+  );
+  pTxCharacteristic->addDescriptor(new BLE2902());
+
+  BLECharacteristic *pRxCharacteristic = pService->createCharacteristic(
+      CHARACTERISTIC_UUID_RX,
+      BLECharacteristic::PROPERTY_WRITE
+  );
+  pRxCharacteristic->setCallbacks(new MyRxCallbacks());
+
+  pService->start();
+
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinPreferred(0x06);
+  pAdvertising->setMinPreferred(0x12);
+  BLEDevice::startAdvertising();
+
+  Serial.println("[BLE] Advertising started. Ready to connect as 'PVD-Patch'!");
+}
+
+void streamTelemetry(unsigned long ts, unsigned long ir, float gx, float gy, float gz) {
+  char packet[64];
+  int len = snprintf(packet, sizeof(packet), "DATA,%lu,%lu,%.2f,%.2f,%.2f\n",
+                     ts, ir, gx, gy, gz);
+
+  // 1. USB Serial output
+  Serial.print(packet);
+
+  // 2. BLE notify to connected client
+  if (deviceConnected && pTxCharacteristic != nullptr) {
+    pTxCharacteristic->setValue((uint8_t*)packet, len);
+    pTxCharacteristic->notify();
+  }
+}
 
 // =====================================================
 // I2C
@@ -319,8 +404,8 @@ bool acquirePPGWindow() {
 
         sampleCount++;
 
-        // Stream real-time Finger PPG + Gyro (gx,gy,gz) for Web Serial dashboard
-        Serial.printf("DATA,%lu,%lu,%.2f,%.2f,%.2f\n", (unsigned long)millis(), (unsigned long)irValue, gx, gy, gz);
+        // Stream real-time Finger PPG + Gyro (gx,gy,gz) for Web Serial and BLE
+        streamTelemetry(millis(), irValue, gx, gy, gz);
 
         // Progress
         if (sampleCount % 200 == 0) {
@@ -396,13 +481,17 @@ void setup() {
   Serial.println("MPU6500: OK");
 
   // -----------------------------------------
-  // WIFI
+  // BLE (Bluetooth Low Energy)
   // -----------------------------------------
+  initBLE();
 
+  // -----------------------------------------
+  // WIFI (Optional Cloud Upload)
+  // -----------------------------------------
   connectWiFi();
 
   Serial.println();
-  Serial.println("SYSTEM READY");
+  Serial.println("SYSTEM READY (USB Serial + BLE Active)");
 }
 
 // =====================================================
@@ -410,6 +499,17 @@ void setup() {
 // =====================================================
 
 void loop() {
+  // Re-start advertising when client disconnects
+  if (!deviceConnected && oldDeviceConnected) {
+    delay(500);
+    pServer->startAdvertising();
+    Serial.println("[BLE] Restarted advertising");
+    oldDeviceConnected = deviceConnected;
+  }
+  if (deviceConnected && !oldDeviceConnected) {
+    oldDeviceConnected = deviceConnected;
+  }
+
   max30102.check();
 
   while (max30102.available()) {
@@ -420,8 +520,8 @@ void loop() {
     float gx = 0, gy = 0, gz = 0;
     readMPU6500(ax, ay, az, gx, gy, gz);
 
-    // Stream real-time Finger PPG + Gyro (gx,gy,gz) continuously at 200 Hz
-    Serial.printf("DATA,%lu,%lu,%.2f,%.2f,%.2f\n", millis(), irValue, gx, gy, gz);
+    // Stream real-time Finger PPG + Gyro (gx,gy,gz) over both Serial and BLE
+    streamTelemetry(millis(), irValue, gx, gy, gz);
 
     max30102.nextSample();
   }

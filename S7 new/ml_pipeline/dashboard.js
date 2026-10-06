@@ -1124,8 +1124,11 @@ let esp32LiveChart = null;
 let esp32SerialPort = null;
 let esp32SerialReader = null;
 let esp32BleDevice = null;
+let esp32BleStreamChar = null;
+let esp32BleRxChar = null;
 let esp32BleFeatureChar = null;
 let esp32BleRiskChar = null;
+let bleTextBuffer = "";
 let esp32SimInterval = null;
 let isRecording = false;
 let recordedSamples = []; // [{timestamp_ms, ir_finger, ir_toe}, ...]
@@ -1322,37 +1325,82 @@ async function connectESP32() {
         }
     } else if (connMethod === "ble") {
         if (!("bluetooth" in navigator)) {
-            alert("Web Bluetooth API is not supported by your browser or is disabled. Use Chrome/Edge.");
+            alert("Web Bluetooth API is not supported by your browser or is disabled. Please open this dashboard in Google Chrome, Microsoft Edge, or a Web Bluetooth compatible browser over HTTPS.");
             return;
         }
         
         console.log("[ESP32] Connecting via Web Bluetooth...");
         try {
             esp32BleDevice = await navigator.bluetooth.requestDevice({
-                filters: [{ name: "PVD-Patch" }],
+                filters: [
+                    { name: "PVD-Patch" },
+                    { namePrefix: "PVD" },
+                    { namePrefix: "ESP32" }
+                ],
                 optionalServices: ["6e400001-b5a3-f393-e0a9-e50e24dcca9e"]
             });
             
+            console.log("[ESP32] Selected BLE device:", esp32BleDevice.name || "PVD-Patch");
+            
+            esp32BleDevice.addEventListener('gattserverdisconnected', () => {
+                console.warn("[ESP32] BLE connection closed by peripheral.");
+                disconnectESP32();
+            });
+
             const server = await esp32BleDevice.gatt.connect();
             const service = await server.getPrimaryService("6e400001-b5a3-f393-e0a9-e50e24dcca9e");
             
-            // 1. Feature characteristic notification
-            esp32BleFeatureChar = await service.getCharacteristic("6e400002-b5a3-f393-e0a9-e50e24dcca9e");
-            await esp32BleFeatureChar.startNotifications();
-            esp32BleFeatureChar.addEventListener('characteristicvaluechanged', handleBleFeaturesChanged);
-            
-            // 2. Risk characteristic notification
-            esp32BleRiskChar = await service.getCharacteristic("6e400003-b5a3-f393-e0a9-e50e24dcca9e");
-            await esp32BleRiskChar.startNotifications();
-            esp32BleRiskChar.addEventListener('characteristicvaluechanged', handleBleRiskChanged);
+            // 1. Subscribe to Live Data Stream / TX Characteristic (UUID: ...0003)
+            try {
+                esp32BleStreamChar = await service.getCharacteristic("6e400003-b5a3-f393-e0a9-e50e24dcca9e");
+                await esp32BleStreamChar.startNotifications();
+                esp32BleStreamChar.addEventListener('characteristicvaluechanged', handleBleStreamChanged);
+                console.log("[ESP32] Subscribed to BLE TX stream (6e400003).");
+            } catch (txErr) {
+                console.warn("[ESP32] Primary TX characteristic error, attempting fallback:", txErr);
+                esp32BleStreamChar = await service.getCharacteristic("6e400002-b5a3-f393-e0a9-e50e24dcca9e");
+                await esp32BleStreamChar.startNotifications();
+                esp32BleStreamChar.addEventListener('characteristicvaluechanged', handleBleStreamChanged);
+            }
+
+            // 2. Optional RX Characteristic for device control (UUID: ...0002)
+            try {
+                esp32BleRxChar = await service.getCharacteristic("6e400002-b5a3-f393-e0a9-e50e24dcca9e");
+            } catch (rxErr) {
+                esp32BleRxChar = null;
+            }
             
             setEsp32ConnectedState("ble");
-            console.log("[ESP32] BLE connected and subscribed successfully.");
+            console.log("[ESP32] BLE connected and live stream active.");
         } catch (e) {
             console.error("Web Bluetooth connection failed:", e);
-            alert(`Bluetooth Connection failed: ${e.message}`);
+            if (e.name !== "NotFoundError") {
+                alert(`Bluetooth Connection failed: ${e.message}`);
+            }
             disconnectESP32();
         }
+    }
+}
+
+// Handle incoming BLE telemetry packets
+function handleBleStreamChanged(event) {
+    try {
+        const val = event.target.value;
+        const decoder = new TextDecoder("utf-8");
+        const chunk = decoder.decode(val);
+        bleTextBuffer += chunk;
+        
+        let lines = bleTextBuffer.split("\n");
+        bleTextBuffer = lines.pop(); // keep trailing incomplete segment
+        
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed) {
+                parseSerialLine(trimmed);
+            }
+        }
+    } catch (err) {
+        console.error("[ESP32] Error processing BLE data:", err);
     }
 }
 
@@ -1375,6 +1423,10 @@ function disconnectESP32() {
     }
     
     // 3. Clear BLE
+    if (esp32BleStreamChar) {
+        try { esp32BleStreamChar.stopNotifications(); } catch(e) {}
+        esp32BleStreamChar = null;
+    }
     if (esp32BleFeatureChar) {
         try { esp32BleFeatureChar.stopNotifications(); } catch(e) {}
         esp32BleFeatureChar = null;
@@ -1383,8 +1435,10 @@ function disconnectESP32() {
         try { esp32BleRiskChar.stopNotifications(); } catch(e) {}
         esp32BleRiskChar = null;
     }
-    if (esp32BleDevice && esp32BleDevice.gatt.connected) {
-        esp32BleDevice.gatt.disconnect();
+    esp32BleRxChar = null;
+    bleTextBuffer = "";
+    if (esp32BleDevice && esp32BleDevice.gatt && esp32BleDevice.gatt.connected) {
+        try { esp32BleDevice.gatt.disconnect(); } catch(e) {}
     }
     esp32BleDevice = null;
     
