@@ -1,9 +1,85 @@
 #include "MAX30105.h"
 
 #include <Arduino.h>
+#include <BLE2902.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <Wire.h>
+
+// =====================================================
+// BLUETOOTH BLE (PVD-Patch Nordic UART Service)
+// =====================================================
+
+#define BLE_DEVICE_NAME "PVD-Patch"
+#define BLE_SERVICE_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+#define BLE_RX_CHAR_UUID "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+#define BLE_TX_CHAR_UUID "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+
+BLEServer *pBleServer = nullptr;
+BLECharacteristic *pTxChar = nullptr;
+BLECharacteristic *pRxChar = nullptr;
+bool bleConnected = false;
+volatile bool bleStartRequested = false;
+volatile bool bleStopRequested = false;
+
+class MyBleServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer *pServer) {
+    bleConnected = true;
+    Serial.println("\n[BLE] Web Dashboard paired & connected over Bluetooth!");
+  }
+  void onDisconnect(BLEServer *pServer) {
+    bleConnected = false;
+    Serial.println(
+        "\n[BLE] Dashboard disconnected. Resuming BLE advertising...");
+    BLEDevice::startAdvertising();
+  }
+};
+
+class MyBleRxCallbacks : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic *pChar) {
+    String rxVal = pChar->getValue().c_str();
+    rxVal.trim();
+    rxVal.toUpperCase();
+    Serial.print("[BLE RX]: ");
+    Serial.println(rxVal);
+    if (rxVal.startsWith("START") || rxVal == "S" || rxVal == "REC") {
+      bleStartRequested = true;
+    } else if (rxVal.startsWith("STOP") || rxVal == "Q") {
+      bleStopRequested = true;
+    }
+  }
+};
+
+void initBLE() {
+  BLEDevice::init(BLE_DEVICE_NAME);
+  pBleServer = BLEDevice::createServer();
+  pBleServer->setCallbacks(new MyBleServerCallbacks());
+
+  BLEService *pService = pBleServer->createService(BLE_SERVICE_UUID);
+
+  pTxChar = pService->createCharacteristic(BLE_TX_CHAR_UUID,
+                                           BLECharacteristic::PROPERTY_NOTIFY);
+  pTxChar->addDescriptor(new BLE2902());
+
+  pRxChar = pService->createCharacteristic(
+      BLE_RX_CHAR_UUID,
+      BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
+  pRxChar->setCallbacks(new MyBleRxCallbacks());
+
+  pService->start();
+
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(BLE_SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinPreferred(0x06);
+  pAdvertising->setMinPreferred(0x12);
+  BLEDevice::startAdvertising();
+
+  Serial.println("[BLE] Advertising active as 'PVD-Patch' (Ready to pair)!");
+}
 
 // =====================================================
 // WIFI
@@ -41,7 +117,7 @@ TwoWire WireToe = TwoWire(1);
 // =====================================================
 
 #define SAMPLE_RATE 200
-#define WINDOW_SECONDS 8
+#define WINDOW_SECONDS 15
 #define TOTAL_SAMPLES (SAMPLE_RATE * WINDOW_SECONDS)
 
 // =====================================================
@@ -581,8 +657,8 @@ bool acquirePPGWindow() {
 
   csvData = "";
 
-  // Reserve enough memory
-  csvData.reserve(130000);
+  // Reserve enough memory for 15s of CSV data (3000 lines)
+  csvData.reserve(250000);
 
   csvData = "SAMPLE,TIME_US,"
             "FINGER_IR,FINGER_RED,"
@@ -596,14 +672,15 @@ bool acquirePPGWindow() {
 
   Serial.println();
   Serial.println("==========================================");
-  Serial.println("SENSORS ON -> COLLECTING 1600 SAMPLES");
-  Serial.println("8 SECOND WINDOW");
+  Serial.println("SENSORS ON -> COLLECTING 3000 SAMPLES");
+  Serial.println("15 SECOND WINDOW");
   Serial.println("==========================================");
 
   unsigned long startTime = millis();
 
   while (sampleCount < TOTAL_SAMPLES) {
-    if (checkSerialStop()) {
+    if (checkSerialStop() || bleStopRequested) {
+      bleStopRequested = false;
       Serial.println("ACQUISITION CANCELLED BY USER");
       setSensorsPower(false);
       return false;
@@ -652,6 +729,16 @@ bool acquirePPGWindow() {
                     (unsigned long)(timestamp / 1000), (unsigned long)fingerIR,
                     (unsigned long)lastToeIR, gx, gy, gz);
 
+      // Stream live to Web Bluetooth if connected
+      if (bleConnected && pTxChar && sampleCount % 2 == 0) {
+        char bleBuf[48];
+        snprintf(bleBuf, sizeof(bleBuf), "DATA,%lu,%lu,%lu\n",
+                 (unsigned long)(timestamp / 1000), (unsigned long)fingerIR,
+                 (unsigned long)lastToeIR);
+        pTxChar->setValue((uint8_t *)bleBuf, strlen(bleBuf));
+        pTxChar->notify();
+      }
+
       sampleCount++;
 
       max30102.nextSample();
@@ -659,12 +746,12 @@ bool acquirePPGWindow() {
       if (sampleCount % 100 == 0) {
         Serial.print("Samples: ");
         Serial.print(sampleCount);
-        Serial.println("/1600");
+        Serial.println("/3000");
       }
     }
 
-    // Safety timeout (20 seconds for an 8-second window)
-    if (millis() - startTime > 20000) {
+    // Safety timeout (30 seconds for a 15-second window)
+    if (millis() - startTime > 30000) {
       Serial.println("ERROR: Acquisition timeout");
       setSensorsPower(false);
       return false;
@@ -679,7 +766,7 @@ bool acquirePPGWindow() {
   setSensorsPower(false);
 
   Serial.println();
-  Serial.println("1600 SAMPLES COMPLETED -> SENSORS TURNED OFF");
+  Serial.println("3000 SAMPLES COMPLETED -> SENSORS TURNED OFF");
 
   Serial.print("CSV SIZE: ");
   Serial.print(csvData.length());
@@ -755,6 +842,12 @@ void setup() {
   connectWiFi();
 
   // -------------------------------------------------
+  // BLUETOOTH BLE
+  // -------------------------------------------------
+
+  initBLE();
+
+  // -------------------------------------------------
   // SENSORS OFF BY DEFAULT (STANDBY)
   // -------------------------------------------------
   setSensorsPower(false);
@@ -783,7 +876,14 @@ void loop() {
     startTriggered = true;
   }
 
-  // 2. Check Cloud Server status (polling every 1.5s when idle)
+  // 2. Check Bluetooth BLE command
+  if (bleStartRequested) {
+    bleStartRequested = false;
+    Serial.println("\n[TRIGGER] Start command received via Bluetooth BLE!");
+    startTriggered = true;
+  }
+
+  // 3. Check Cloud Server status (polling every 1.5s when idle)
   static unsigned long lastPoll = 0;
   if (!startTriggered && millis() - lastPoll > 1500) {
     lastPoll = millis();

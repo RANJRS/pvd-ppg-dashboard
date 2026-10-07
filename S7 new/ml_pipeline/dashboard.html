@@ -336,8 +336,9 @@
                 <div class="card glass-card full-width-card margin-bottom-lg">
                     <div class="card-header flex-between">
                         <h3>ESP32 Live Waveform Monitor</h3>
-                        <div class="chart-legend">
-                            <span class="legend-dot color-finger"></span> Finger PPG (Live)
+                        <div class="chart-legend" style="display: flex; gap: 16px;">
+                            <div><span class="legend-dot color-finger"></span> Finger PPG (Live)</div>
+                            <div><span class="legend-dot" style="background-color: var(--color-cyan, #06b6d4);"></span> Toe PPG (Live)</div>
                         </div>
                     </div>
                     <div class="card-body ppg-chart-container" style="height: 320px; position: relative;">

@@ -56,7 +56,7 @@ def segment_windows(df, sos, label, subject_id):
     has_temp = OPTIONAL_TEMP_COLS.issubset(df.columns)
     has_imu  = OPTIONAL_IMU_COLS.issubset(df.columns)
 
-    for start in range(0, n - WINDOW_LEN, step):
+    for start in range(0, n - WINDOW_LEN + 1, step):
         seg = df.iloc[start:start + WINDOW_LEN]
         ir_finger = seg["ir_finger"].to_numpy(dtype=float)
         ir_toe    = seg["ir_toe"].to_numpy(dtype=float)

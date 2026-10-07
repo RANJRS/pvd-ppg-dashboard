@@ -1171,7 +1171,16 @@ function initEsp32LiveChart() {
                     label: 'Finger PPG (Live)',
                     data: liveChartDataFinger,
                     borderColor: violetColor,
-                    borderWidth: 2.5,
+                    borderWidth: 2.2,
+                    pointRadius: 0,
+                    tension: 0.2,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Toe PPG (Live)',
+                    data: liveChartDataToe,
+                    borderColor: cyanColor,
+                    borderWidth: 2.2,
                     pointRadius: 0,
                     tension: 0.2,
                     yAxisID: 'y'
@@ -1618,12 +1627,14 @@ function handleIncomingSample(ts, finger, toe) {
     
     // Push directly to rolling buffers
     liveChartDataFinger.push(finger);
+    liveChartDataToe.push(toe);
     liveChartTimestamps.push(ts / 1000.0);
     
     // Keep last 3 seconds (600 samples at 200 Hz)
     const samplesToKeep = 600;
     if (liveChartDataFinger.length > samplesToKeep) {
         liveChartDataFinger.shift();
+        liveChartDataToe.shift();
         liveChartTimestamps.shift();
     }
     
@@ -1668,14 +1679,18 @@ function renderLiveChart() {
     
     esp32LiveChart.data.labels = relativeTimes;
     esp32LiveChart.data.datasets[0].data = liveChartDataFinger;
+    if (esp32LiveChart.data.datasets.length > 1) {
+        esp32LiveChart.data.datasets[1].data = liveChartDataToe;
+    }
     
-    // 3. Fast O(N) min/max calculation without stack spread
+    // 3. Fast O(N) min/max calculation taking both Finger and Toe into account
     if (liveChartDataFinger.length > 20) {
         let minVal = Infinity;
         let maxVal = -Infinity;
-        for (let i = 0; i < liveChartDataFinger.length; i++) {
-            const v = liveChartDataFinger[i];
-            if (v !== null && !isNaN(v)) {
+        const allSamples = liveChartDataFinger.concat(liveChartDataToe);
+        for (let i = 0; i < allSamples.length; i++) {
+            const v = allSamples[i];
+            if (v !== null && !isNaN(v) && v > 0) {
                 if (v < minVal) minVal = v;
                 if (v > maxVal) maxVal = v;
             }
