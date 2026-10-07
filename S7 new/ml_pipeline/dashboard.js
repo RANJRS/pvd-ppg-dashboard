@@ -1174,7 +1174,7 @@ function initEsp32LiveChart() {
                     borderWidth: 2.2,
                     pointRadius: 0,
                     tension: 0.2,
-                    yAxisID: 'y'
+                    yAxisID: 'yFinger'
                 },
                 {
                     label: 'Toe PPG (Live)',
@@ -1183,7 +1183,7 @@ function initEsp32LiveChart() {
                     borderWidth: 2.2,
                     pointRadius: 0,
                     tension: 0.2,
-                    yAxisID: 'y'
+                    yAxisID: 'yToe'
                 }
             ]
         },
@@ -1209,22 +1209,45 @@ function initEsp32LiveChart() {
                     min: -4.0,
                     max: 0.0
                 },
-                y: {
+                yFinger: {
+                    type: 'linear',
+                    position: 'left',
                     title: {
                         display: true,
-                        text: 'Raw Amplitude',
-                        color: textThemeColor,
+                        text: 'Finger PPG (MAX30102)',
+                        color: violetColor,
                         font: { family: 'Inter', weight: '600' }
                     },
                     ticks: {
-                        color: textThemeColor,
+                        color: violetColor,
                         font: { family: 'Inter' }
                     },
                     grid: { color: borderThemeColor }
+                },
+                yToe: {
+                    type: 'linear',
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Toe PPG (MAX30100)',
+                        color: cyanColor,
+                        font: { family: 'Inter', weight: '600' }
+                    },
+                    ticks: {
+                        color: cyanColor,
+                        font: { family: 'Inter' }
+                    },
+                    grid: { drawOnChartArea: false }
                 }
             },
             plugins: {
-                legend: { display: false },
+                legend: {
+                    display: true,
+                    labels: {
+                        color: textThemeColor,
+                        font: { family: 'Inter', weight: '500' }
+                    }
+                },
                 tooltip: { enabled: false }
             }
         }
@@ -1578,9 +1601,23 @@ async function readSerialStream() {
 }
 
 // Parse Serial line
-// Format: "DATA,ts,ir_finger,ir_toe"
+// Formats:
+// "STATUS,DONE", "STATUS,RECORDING", "STATUS,STOPPED"
+// "DATA,ts,ir_finger,ir_toe,gx,gy,gz"
 function parseSerialLine(line) {
     if (!line) return;
+    
+    // Status Handshake from Hardware
+    if (line.startsWith("STATUS,")) {
+        const status = line.split(",")[1]?.trim();
+        console.log(`[ESP32] Hardware status: ${status}`);
+        if (status === "DONE" || status === "STOPPED") {
+            if (isRecording) {
+                stopRecording();
+            }
+        }
+        return;
+    }
     
     if (line.startsWith("DATA,")) {
         const parts = line.split(",");
@@ -1592,15 +1629,14 @@ function parseSerialLine(line) {
                 handleIncomingSample(ts, finger, toe);
             }
             
-            // Parse Gyro (gx, gy, gz) if provided
-            let gx, gy, gz;
-            if (parts.length >= 6) {
-                gx = parseFloat(parts[3]);
-                gy = parseFloat(parts[4]);
-                gz = parseFloat(parts[5]);
-            }
-            if (gx !== undefined && !isNaN(gx) && !isNaN(gy) && !isNaN(gz)) {
-                latestGyroData = { gx, gy, gz, valid: true };
+            // Correct Gyro parsing: indices 4 (gx), 5 (gy), 6 (gz)
+            if (parts.length >= 7) {
+                const gx = parseFloat(parts[4]);
+                const gy = parseFloat(parts[5]);
+                const gz = parseFloat(parts[6]);
+                if (!isNaN(gx) && !isNaN(gy) && !isNaN(gz)) {
+                    latestGyroData = { gx, gy, gz, valid: true };
+                }
             }
         }
         return;
@@ -1620,6 +1656,7 @@ function parseSerialLine(line) {
 
 let liveChartRenderPending = false;
 let latestGyroData = { gx: 0, gy: 0, gz: 0, valid: false };
+let lastScaleUpdateMs = 0;
 
 // Handle Incoming sample (simulated or serial)
 function handleIncomingSample(ts, finger, toe) {
@@ -1630,8 +1667,8 @@ function handleIncomingSample(ts, finger, toe) {
     liveChartDataToe.push(toe);
     liveChartTimestamps.push(ts / 1000.0);
     
-    // Keep last 3 seconds (600 samples at 200 Hz)
-    const samplesToKeep = 600;
+    // Keep last 3.5 seconds (700 samples at 200 Hz)
+    const samplesToKeep = 700;
     if (liveChartDataFinger.length > samplesToKeep) {
         liveChartDataFinger.shift();
         liveChartDataToe.shift();
@@ -1654,7 +1691,7 @@ function handleIncomingSample(ts, finger, toe) {
     }
 }
 
-// Render chart smoothly at monitor refresh rate (prevents 200/sec browser lag)
+// Render chart smoothly at monitor refresh rate (zero lag, throttled scale adjustments)
 function renderLiveChart() {
     liveChartRenderPending = false;
     if (!esp32LiveChart) return;
@@ -1683,22 +1720,43 @@ function renderLiveChart() {
         esp32LiveChart.data.datasets[1].data = liveChartDataToe;
     }
     
-    // 3. Fast O(N) min/max calculation taking both Finger and Toe into account
-    if (liveChartDataFinger.length > 20) {
-        let minVal = Infinity;
-        let maxVal = -Infinity;
-        const allSamples = liveChartDataFinger.concat(liveChartDataToe);
-        for (let i = 0; i < allSamples.length; i++) {
-            const v = allSamples[i];
-            if (v !== null && !isNaN(v) && v > 0) {
-                if (v < minVal) minVal = v;
-                if (v > maxVal) maxVal = v;
+    // 3. Independent autoscaling for yFinger and yToe (throttled every 350ms to eliminate layout thrashing & UI lag)
+    const nowMs = performance.now();
+    if (nowMs - lastScaleUpdateMs > 350 && len > 10) {
+        lastScaleUpdateMs = nowMs;
+        
+        // Autoscale Finger PPG
+        let minF = Infinity, maxF = -Infinity;
+        for (let i = 0; i < liveChartDataFinger.length; i++) {
+            const v = liveChartDataFinger[i];
+            if (v > 0) {
+                if (v < minF) minF = v;
+                if (v > maxF) maxF = v;
             }
         }
-        if (minVal !== Infinity && maxVal !== -Infinity && minVal < maxVal) {
-            const pad = (maxVal - minVal) * 0.1 || 10;
-            esp32LiveChart.options.scales.y.min = Math.floor(minVal - pad);
-            esp32LiveChart.options.scales.y.max = Math.ceil(maxVal + pad);
+        if (minF !== Infinity && maxF !== -Infinity && minF < maxF) {
+            const padF = Math.max((maxF - minF) * 0.1, 50);
+            if (esp32LiveChart.options.scales.yFinger) {
+                esp32LiveChart.options.scales.yFinger.min = Math.floor(minF - padF);
+                esp32LiveChart.options.scales.yFinger.max = Math.ceil(maxF + padF);
+            }
+        }
+        
+        // Autoscale Toe PPG
+        let minT = Infinity, maxT = -Infinity;
+        for (let i = 0; i < liveChartDataToe.length; i++) {
+            const v = liveChartDataToe[i];
+            if (v > 0) {
+                if (v < minT) minT = v;
+                if (v > maxT) maxT = v;
+            }
+        }
+        if (minT !== Infinity && maxT !== -Infinity && minT < maxT) {
+            const padT = Math.max((maxT - minT) * 0.1, 20);
+            if (esp32LiveChart.options.scales.yToe) {
+                esp32LiveChart.options.scales.yToe.min = Math.floor(minT - padT);
+                esp32LiveChart.options.scales.yToe.max = Math.ceil(maxT + padT);
+            }
         }
     }
     
@@ -1783,6 +1841,8 @@ function startRecording() {
     isRecording = true;
     recordedSamples = [];
     recordStartTime = Date.now();
+    packetCount = 0;
+    lastPacketCount = 0;
 
     // Notify ESP32 to turn sensors ON and begin acquisition!
     sendDeviceCommand("START_REC");
@@ -1795,39 +1855,55 @@ function startRecording() {
     }
     
     document.getElementById("btn-rec-start").disabled = true;
-    document.getElementById("btn-rec-stop").disabled = false;
+    const stopBtn = document.getElementById("btn-rec-stop");
+    if (stopBtn) stopBtn.disabled = false;
     
     const downloadBtn = document.getElementById("btn-rec-download");
     if (downloadBtn) downloadBtn.disabled = true;
     
-    let elapsed = 0;
-    document.getElementById("rec-count").innerText = "0";
+    const recCountEl = document.getElementById("rec-count");
+    if (recCountEl) recCountEl.innerText = "0";
+    
+    if (recordTimerInterval) {
+        clearInterval(recordTimerInterval);
+    }
     
     recordTimerInterval = setInterval(() => {
-        elapsed = Math.floor((Date.now() - recordStartTime) / 1000);
-        document.getElementById("rec-count").innerText = elapsed;
+        if (!isRecording) {
+            clearInterval(recordTimerInterval);
+            return;
+        }
+        // Perfect Time Sync: sync between real-time clock and physical samples (200 samples = 1 second)
+        const wallSec = Math.floor((Date.now() - recordStartTime) / 1000);
+        const sampleSec = Math.floor(recordedSamples.length / 200);
+        const currentSec = Math.min(15, Math.max(wallSec, sampleSec));
         
-        // Auto-stop exactly after 15 seconds
-        if (elapsed >= 15) {
+        if (recCountEl) recCountEl.innerText = currentSec;
+        
+        // Safety auto-stop after 16 seconds or full 3000 samples
+        if (currentSec >= 16 || recordedSamples.length >= 3000) {
             stopRecording();
         }
-    }, 1000);
+    }, 400);
 }
 
 // Stop Acquisition recording & run prediction
 async function stopRecording() {
+    if (!isRecording && (!recordedSamples || recordedSamples.length === 0)) return;
     isRecording = false;
-
-    // Notify ESP32 to stop acquisition and turn sensors OFF!
-    sendDeviceCommand("STOP_REC");
 
     if (recordTimerInterval) {
         clearInterval(recordTimerInterval);
         recordTimerInterval = null;
     }
-    
-    document.getElementById("btn-rec-start").disabled = false;
-    document.getElementById("btn-rec-stop").disabled = true;
+
+    // Notify ESP32 to stop acquisition and turn sensors OFF!
+    sendDeviceCommand("STOP_REC");
+
+    const startBtn = document.getElementById("btn-rec-start");
+    const stopBtn = document.getElementById("btn-rec-stop");
+    if (startBtn) startBtn.disabled = false;
+    if (stopBtn) stopBtn.disabled = true;
     
     const downloadBtn = document.getElementById("btn-rec-download");
     if (downloadBtn && recordedSamples.length > 0) {
@@ -1841,7 +1917,7 @@ async function stopRecording() {
     console.log(`[ESP32] Recording stopped. Captured ${recordedSamples.length} samples.`);
     
     if (recordedSamples.length < 1600) {
-        alert("Recording is too short! Please record at least 8 seconds of data to run the 8s sliding window MLP classifier.");
+        alert(`Recording is too short (${recordedSamples.length} samples). Please record at least 8 seconds (1600 samples) to run the MLP classifier.`);
         return;
     }
     

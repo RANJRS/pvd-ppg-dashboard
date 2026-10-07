@@ -670,10 +670,16 @@ bool acquirePPGWindow() {
   uint16_t lastToeIR = 0;
   uint16_t lastToeRED = 0;
 
+  // Signal starting status to Web Serial and BLE
+  Serial.println("STATUS,RECORDING");
+  if (bleConnected && pTxChar) {
+    pTxChar->setValue((uint8_t *)"STATUS,RECORDING\n", 17);
+    pTxChar->notify();
+  }
+
   Serial.println();
   Serial.println("==========================================");
-  Serial.println("SENSORS ON -> COLLECTING 3000 SAMPLES");
-  Serial.println("15 SECOND WINDOW");
+  Serial.println("SENSORS ON -> COLLECTING 3000 SAMPLES (15s)");
   Serial.println("==========================================");
 
   unsigned long startTime = millis();
@@ -681,6 +687,11 @@ bool acquirePPGWindow() {
   while (sampleCount < TOTAL_SAMPLES) {
     if (checkSerialStop() || bleStopRequested) {
       bleStopRequested = false;
+      Serial.println("STATUS,STOPPED");
+      if (bleConnected && pTxChar) {
+        pTxChar->setValue((uint8_t *)"STATUS,STOPPED\n", 15);
+        pTxChar->notify();
+      }
       Serial.println("ACQUISITION CANCELLED BY USER");
       setSensorsPower(false);
       return false;
@@ -698,19 +709,14 @@ bool acquirePPGWindow() {
     // Update finger sensor
     max30102.check();
 
+    // Read IMU once per batch (outside inner loop) to avoid I2C bus congestion
+    float ax = 0, ay = 0, az = 0;
+    float gx = 0, gy = 0, gz = 0;
+    readMPU6500(ax, ay, az, gx, gy, gz);
+
     while (max30102.available() && sampleCount < TOTAL_SAMPLES) {
       uint32_t fingerIR = max30102.getFIFOIR();
       uint32_t fingerRED = max30102.getFIFORed();
-
-      float ax, ay, az;
-      float gx, gy, gz;
-
-      bool motionOK = readMPU6500(ax, ay, az, gx, gy, gz);
-
-      if (!motionOK) {
-        ax = ay = az = 0;
-        gx = gy = gz = 0;
-      }
 
       uint32_t timestamp = micros();
 
@@ -723,8 +729,7 @@ bool acquirePPGWindow() {
 
       csvData += row;
 
-      // Stream live telemetry for Web Serial chart
-      // (DATA,ts_ms,finger,toe,gx,gy,gz)
+      // Stream live telemetry for Web Serial chart (DATA,ts_ms,finger,toe,gx,gy,gz)
       Serial.printf("DATA,%lu,%lu,%lu,%.1f,%.1f,%.1f\n",
                     (unsigned long)(timestamp / 1000), (unsigned long)fingerIR,
                     (unsigned long)lastToeIR, gx, gy, gz);
@@ -743,16 +748,15 @@ bool acquirePPGWindow() {
 
       max30102.nextSample();
 
-      if (sampleCount % 100 == 0) {
-        Serial.print("Samples: ");
-        Serial.print(sampleCount);
-        Serial.println("/3000");
+      if (sampleCount % 200 == 0) {
+        Serial.printf("Progress: %d/3000\n", sampleCount);
       }
     }
 
-    // Safety timeout (30 seconds for a 15-second window)
-    if (millis() - startTime > 30000) {
+    // Safety timeout (25 seconds for a 15-second window)
+    if (millis() - startTime > 25000) {
       Serial.println("ERROR: Acquisition timeout");
+      Serial.println("STATUS,STOPPED");
       setSensorsPower(false);
       return false;
     }
@@ -765,8 +769,15 @@ bool acquirePPGWindow() {
   // Acquisition finished: turn sensors OFF immediately!
   setSensorsPower(false);
 
+  // Send completion message so dashboard immediately stops timer and runs model
+  Serial.println("STATUS,DONE");
+  if (bleConnected && pTxChar) {
+    pTxChar->setValue((uint8_t *)"STATUS,DONE\n", 12);
+    pTxChar->notify();
+  }
+
   Serial.println();
-  Serial.println("3000 SAMPLES COMPLETED -> SENSORS TURNED OFF");
+  Serial.printf("3000 SAMPLES COMPLETED in %lu ms -> SENSORS TURNED OFF\n", millis() - startTime);
 
   Serial.print("CSV SIZE: ");
   Serial.print(csvData.length());
@@ -781,6 +792,7 @@ bool acquirePPGWindow() {
 
 void setup() {
   Serial.begin(115200);
+  Serial.setTimeout(10); // Prevent blocking on partial serial lines
 
   delay(2000);
 
@@ -869,6 +881,7 @@ void loop() {
   }
 
   bool startTriggered = false;
+  bool isCloudTrigger = false;
 
   // 1. Check Serial command (Web Serial or USB Monitor)
   if (checkSerialStart()) {
@@ -877,19 +890,20 @@ void loop() {
   }
 
   // 2. Check Bluetooth BLE command
-  if (bleStartRequested) {
+  if (!startTriggered && bleStartRequested) {
     bleStartRequested = false;
     Serial.println("\n[TRIGGER] Start command received via Bluetooth BLE!");
     startTriggered = true;
   }
 
-  // 3. Check Cloud Server status (polling every 1.5s when idle)
+  // 3. Check Cloud Server status (polling only when idle and not in active BLE/Serial session)
   static unsigned long lastPoll = 0;
-  if (!startTriggered && millis() - lastPoll > 1500) {
+  if (!startTriggered && !bleConnected && millis() - lastPoll > 4000) {
     lastPoll = millis();
     if (checkServerStart()) {
-      Serial.println("\n[TRIGGER] 'Start Rec' clicked on Web Dashboard!");
+      Serial.println("\n[TRIGGER] 'Start Rec' clicked on Web Dashboard via WiFi!");
       startTriggered = true;
+      isCloudTrigger = true;
     }
   }
 
@@ -897,11 +911,15 @@ void loop() {
     bool acquired = acquirePPGWindow();
 
     if (acquired) {
-      bool uploaded = sendDataToDashboard();
-      if (uploaded) {
-        Serial.println("CYCLE COMPLETE");
+      if (isCloudTrigger) {
+        bool uploaded = sendDataToDashboard();
+        if (uploaded) {
+          Serial.println("CYCLE COMPLETE");
+        } else {
+          Serial.println("UPLOAD FAILED");
+        }
       } else {
-        Serial.println("UPLOAD FAILED");
+        Serial.println("CYCLE COMPLETE (Streamed to Dashboard via Serial/BLE)");
       }
     } else {
       Serial.println("ACQUISITION ABORTED / FAILED");
@@ -913,5 +931,5 @@ void loop() {
         "\n[STANDBY] Sensors are OFF. Waiting for next 'Start Rec'...");
   }
 
-  delay(50);
+  delay(20);
 }
