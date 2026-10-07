@@ -547,6 +547,27 @@ def predict():
     except Exception as e:
         return jsonify({"error": f"Failed to parse CSV: {e}"}), 400
 
+    if df.empty or len(df) < 100:
+        return jsonify({"error": "Insufficient data in recording"}), 400
+
+    # Check duration (minimum 7.5 seconds)
+    duration_ms = float(df["timestamp_ms"].iloc[-1] - df["timestamp_ms"].iloc[0]) if len(df) > 1 else 0.0
+    if duration_ms < 7500 and len(df) < 1500:
+        return jsonify({"error": f"Recording is too short ({duration_ms/1000.0:.1f}s). Need at least 8 seconds of data."}), 400
+
+    # Resample to standard 200 Hz (5ms grid) if data arrived at ~100 Hz (Bluetooth BLE)
+    t_orig = df["timestamp_ms"].to_numpy(dtype=float)
+    if len(t_orig) > 1:
+        dt_median = float(np.median(np.diff(t_orig)))
+        if dt_median > 6.0 or len(df) < 1600:
+            t_resampled = np.arange(t_orig[0], t_orig[-1], 5.0)  # 200 Hz
+            resampled_dict = {"timestamp_ms": t_resampled.astype(np.int64)}
+            for col in df.columns:
+                if col != "timestamp_ms":
+                    resampled_dict[col] = np.interp(t_resampled, t_orig, df[col].to_numpy(dtype=float))
+            df = pd.DataFrame(resampled_dict)
+            print(f"[PREDICT] Resampled BLE stream from {len(t_orig)} to {len(df)} samples at 200 Hz")
+
     if len(df) < 1600:
         return jsonify({"error": "Need at least 1600 samples (8 sec at 200 Hz)"}), 400
 

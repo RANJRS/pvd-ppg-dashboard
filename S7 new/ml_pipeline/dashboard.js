@@ -1914,10 +1914,17 @@ async function stopRecording() {
     const isSimMode = document.getElementById("esp32-sim-checkbox").checked;
     setEsp32ConnectedState(isSimMode ? "sim" : (esp32SerialPort ? "usb" : "ble"));
     
-    console.log(`[ESP32] Recording stopped. Captured ${recordedSamples.length} samples.`);
+    const n = recordedSamples.length;
+    let durationS = 0;
+    if (n > 1) {
+        durationS = (recordedSamples[n - 1].timestamp_ms - recordedSamples[0].timestamp_ms) / 1000.0;
+    }
+
+    console.log(`[ESP32] Recording stopped. Captured ${n} samples spanning ${durationS.toFixed(1)}s.`);
     
-    if (recordedSamples.length < 1600) {
-        alert(`Recording is too short (${recordedSamples.length} samples). Please record at least 8 seconds (1600 samples) to run the MLP classifier.`);
+    // Support both 200 Hz USB Serial (3000 samples) and 100 Hz Bluetooth BLE (1500 samples)
+    if (durationS < 7.5 && n < 800) {
+        alert(`Recording is too short (${durationS.toFixed(1)}s, ${n} samples). Please record at least 8 seconds of data to run the MLP classifier.`);
         return;
     }
     
@@ -1932,12 +1939,36 @@ async function runModelOnRecording() {
     
     const label = document.getElementById("rec-label").value;
 
+    const n = recordedSamples.length;
+    let samplesToSend = recordedSamples;
+    const dt = n > 1 ? (recordedSamples[n - 1].timestamp_ms - recordedSamples[0].timestamp_ms) / (n - 1) : 5;
+
+    // If incoming data was sampled at ~100 Hz (e.g. over Bluetooth BLE), interpolate to 200 Hz
+    if (dt > 6.5 && n > 2) {
+        console.log(`[ESP32] Interpolating BLE data (${n} samples at ~${Math.round(1000/dt)} Hz) to 200 Hz grid...`);
+        samplesToSend = [];
+        const tStart = recordedSamples[0].timestamp_ms;
+        const tEnd = recordedSamples[n - 1].timestamp_ms;
+        let origIdx = 0;
+        for (let t = tStart; t <= tEnd; t += 5) {
+            while (origIdx < n - 2 && recordedSamples[origIdx + 1].timestamp_ms < t) {
+                origIdx++;
+            }
+            const s0 = recordedSamples[origIdx];
+            const s1 = recordedSamples[origIdx + 1] || s0;
+            const factor = (s1.timestamp_ms > s0.timestamp_ms) ? (t - s0.timestamp_ms) / (s1.timestamp_ms - s0.timestamp_ms) : 0;
+            const f = s0.ir_finger + factor * (s1.ir_finger - s0.ir_finger);
+            const toe = s0.ir_toe + factor * (s1.ir_toe - s0.ir_toe);
+            samplesToSend.push({ timestamp_ms: Math.round(t), ir_finger: f, ir_toe: toe });
+        }
+    }
+
     let csvString = "timestamp_ms,ir_finger,ir_toe\n";
-    recordedSamples.forEach(s => {
+    samplesToSend.forEach(s => {
         csvString += `${s.timestamp_ms},${Math.round(s.ir_finger)},${Math.round(s.ir_toe)}\n`;
     });
     
-    console.log(`[ESP32] Requesting inference on ${recordedSamples.length} lines of data...`);
+    console.log(`[ESP32] Requesting inference on ${samplesToSend.length} lines of data...`);
     
     const startBtn = document.getElementById("btn-rec-start");
     startBtn.disabled = true;
