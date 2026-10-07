@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,18 +8,21 @@
     <!-- Google Fonts: Inter & Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="dashboard.css">
+    <link rel="stylesheet" href="dashboard.css?v=2.8">
     <!-- Theme state initialization to prevent styling flash -->
     <script>
         const savedTheme = localStorage.getItem("theme") || "dark";
         document.documentElement.setAttribute("data-theme", savedTheme);
     </script>
     <!-- Dashboard Logic with cache busting -->
-    <script src="dashboard.js?v=2.7" defer></script>
+    <script src="dashboard.js?v=2.8" defer></script>
 </head>
+
 <body>
     <div class="app-container">
         <!-- Sidebar Navigation -->
@@ -67,7 +71,9 @@
                     <p id="page-subtitle">Summary metrics and dataset distributions</p>
                 </div>
                 <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
-                    <button class="btn btn-secondary" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Light/Dark Theme" style="padding: 10px 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; border-radius: 8px;">☀️</button>
+                    <button class="btn btn-secondary" id="theme-toggle-btn" onclick="toggleTheme()"
+                        title="Toggle Light/Dark Theme"
+                        style="padding: 10px 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; border-radius: 8px;">☀️</button>
                     <button class="btn btn-primary" onclick="reloadData()">🔄 Reload Data</button>
                 </div>
             </header>
@@ -78,17 +84,32 @@
                 <div class="card glass-card pipeline-quick-actions" style="margin-bottom: 24px; padding: 16px 24px;">
                     <div class="flex-between" style="align-items: center; flex-wrap: wrap; gap: 16px;">
                         <div>
-                            <h4 style="font-family: var(--font-heading); font-size: 1.05rem; font-weight: 700; margin-bottom: 4px;">⚡ Quick Pipeline Control</h4>
-                            <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0;">Trigger data generation, preprocessing, and training directly from the home page.</p>
+                            <h4
+                                style="font-family: var(--font-heading); font-size: 1.05rem; font-weight: 700; margin-bottom: 4px;">
+                                ⚡ Quick Pipeline Control</h4>
+                            <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0;">Trigger data
+                                generation, preprocessing, and training directly from the home page.</p>
                         </div>
                         <div class="pipeline-btn-group flex-center" style="gap: 10px;">
-                            <button class="btn btn-secondary" id="home-btn-quick-synthetic" onclick="runPipelineStepHome('generate_synthetic')">📊 Generate Synthetic Data</button>
-                            <button class="btn btn-primary" id="home-btn-quick-train" onclick="runPipelineStepHome('process_and_train')">⚙️ Extract Features & Train</button>
-                            <button class="btn btn-primary" id="home-btn-run-all" onclick="runPipelineStepHome('all')">⚡ Run Full Pipeline</button>
-                            <button class="btn btn-step-stop" id="home-btn-stop" onclick="stopPipelineStep()" style="display: none; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🛑 Stop Running Pipeline</button>
-                            <button class="btn btn-secondary" id="home-btn-download-raw" onclick="downloadRawDataset()" style="background-color: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4);">📥 Download Raw Data (ZIP)</button>
-                            <button class="btn btn-secondary" id="home-btn-download-features" onclick="downloadFeaturesDataset()" style="background-color: var(--color-violet-glow); color: var(--color-violet); border-color: rgba(139, 92, 246, 0.4);">📥 Download Features (CSV)</button>
-                            <button class="btn btn-secondary" id="home-btn-clear" onclick="clearPipelineDataHome()" style="background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🗑️ Clear Synthetic Data</button>
+                            <button class="btn btn-secondary" id="home-btn-quick-synthetic"
+                                onclick="runPipelineStepHome('generate_synthetic')">📊 Generate Synthetic Data</button>
+                            <button class="btn btn-primary" id="home-btn-quick-train"
+                                onclick="runPipelineStepHome('process_and_train')">⚙️ Extract Features & Train</button>
+                            <button class="btn btn-primary" id="home-btn-run-all" onclick="runPipelineStepHome('all')">⚡
+                                Run Full Pipeline</button>
+                            <button class="btn btn-step-stop" id="home-btn-stop" onclick="stopPipelineStep()"
+                                style="display: none; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🛑
+                                Stop Running Pipeline</button>
+                            <button class="btn btn-secondary" id="home-btn-download-raw" onclick="downloadRawDataset()"
+                                style="background-color: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4);">📥
+                                Download Raw Data (ZIP)</button>
+                            <button class="btn btn-secondary" id="home-btn-download-features"
+                                onclick="downloadFeaturesDataset()"
+                                style="background-color: var(--color-violet-glow); color: var(--color-violet); border-color: rgba(139, 92, 246, 0.4);">📥
+                                Download Features (CSV)</button>
+                            <button class="btn btn-secondary" id="home-btn-clear" onclick="clearPipelineDataHome()"
+                                style="background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🗑️
+                                Clear Synthetic Data</button>
                         </div>
                     </div>
                 </div>
@@ -99,28 +120,43 @@
                         <h3>📂 Upload Custom Dataset</h3>
                     </div>
                     <div class="card-body" style="display: flex; gap: 24px; flex-wrap: wrap;">
-                        <div class="upload-dropzone" id="upload-dropzone-overview" style="flex: 1; min-width: 300px; border: 2px dashed rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; background: rgba(255,255,255,0.01); transition: var(--transition-smooth); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+                        <div class="upload-dropzone" id="upload-dropzone-overview"
+                            style="flex: 1; min-width: 300px; border: 2px dashed rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; background: rgba(255,255,255,0.01); transition: var(--transition-smooth); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
                             <div class="upload-icon" style="font-size: 2.5rem;">📤</div>
                             <div>
-                                <p style="font-weight: 600; font-family: var(--font-heading); font-size: 1rem; margin-bottom: 4px;">Drag & Drop files here or click to browse</p>
-                                <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0;">Supports multiple CSVs or a single ZIP containing them</p>
+                                <p
+                                    style="font-weight: 600; font-family: var(--font-heading); font-size: 1rem; margin-bottom: 4px;">
+                                    Drag & Drop files here or click to browse</p>
+                                <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0;">Supports multiple
+                                    CSVs or a single ZIP containing them</p>
                             </div>
-                            <input type="file" id="dataset-file-input-overview" multiple accept=".csv,.zip" style="display: none;">
+                            <input type="file" id="dataset-file-input-overview" multiple accept=".csv,.zip"
+                                style="display: none;">
                         </div>
-                        <div class="upload-options-list" style="width: 320px; display: flex; flex-direction: column; gap: 16px; border-left: 1px solid var(--border-color); padding-left: 24px;">
-                            <h4 style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700;">Upload Settings</h4>
-                            <label class="checkbox-container" style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; cursor: pointer;">
-                                <input type="checkbox" id="upload-clear-checkbox-overview" checked style="accent-color: var(--color-violet);">
+                        <div class="upload-options-list"
+                            style="width: 320px; display: flex; flex-direction: column; gap: 16px; border-left: 1px solid var(--border-color); padding-left: 24px;">
+                            <h4 style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700;">Upload
+                                Settings</h4>
+                            <label class="checkbox-container"
+                                style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; cursor: pointer;">
+                                <input type="checkbox" id="upload-clear-checkbox-overview" checked
+                                    style="accent-color: var(--color-violet);">
                                 <span>Clear existing raw data before upload</span>
                             </label>
-                            
-                            <div id="selected-files-summary-overview" style="display: none; flex-direction: column; gap: 8px; flex-grow: 1;">
-                                <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Selected Files:</div>
-                                <div id="selected-files-list-overview" style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 6px; padding: 8px; font-family: monospace; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-color);">
+
+                            <div id="selected-files-summary-overview"
+                                style="display: none; flex-direction: column; gap: 8px; flex-grow: 1;">
+                                <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Selected
+                                    Files:</div>
+                                <div id="selected-files-list-overview"
+                                    style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 6px; padding: 8px; font-family: monospace; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-color);">
                                 </div>
                             </div>
-                            
-                            <button class="btn btn-primary" id="btn-upload-dataset-overview" onclick="uploadDataset('overview')" disabled style="width: 100%; display: flex; justify-content: center; align-items: center;">📤 Upload Dataset</button>
+
+                            <button class="btn btn-primary" id="btn-upload-dataset-overview"
+                                onclick="uploadDataset('overview')" disabled
+                                style="width: 100%; display: flex; justify-content: center; align-items: center;">📤
+                                Upload Dataset</button>
                         </div>
                     </div>
                 </div>
@@ -243,25 +279,33 @@
             <!-- Tab: ESP32 Acquisition & Live Model Run -->
             <section id="tab-content-esp32" class="tab-content">
                 <!-- Top controls: Connection & Status -->
-                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 24px;">
+                <div class="stats-grid"
+                    style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 24px;">
                     <!-- Connection Card -->
                     <div class="card glass-card esp32-card" style="padding: 20px;">
-                        <h4 style="font-family: var(--font-heading); margin-bottom: 12px; font-weight: 700; font-size: 1.05rem;">🔗 Connect ESP32</h4>
+                        <h4
+                            style="font-family: var(--font-heading); margin-bottom: 12px; font-weight: 700; font-size: 1.05rem;">
+                            🔗 Connect ESP32</h4>
                         <div style="display: flex; flex-direction: column; gap: 12px;">
                             <div class="flex-between" style="align-items: center;">
                                 <span style="font-size: 0.85rem; color: var(--text-secondary);">Select Interface:</span>
                                 <div style="display: flex; gap: 12px;">
-                                    <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                                        <input type="radio" id="conn-method-serial" name="conn-method" value="serial" checked style="accent-color: var(--color-violet);"> USB Serial
+                                    <label
+                                        style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                        <input type="radio" id="conn-method-serial" name="conn-method" value="serial"
+                                            checked style="accent-color: var(--color-violet);"> USB Serial
                                     </label>
-                                    <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                                        <input type="radio" id="conn-method-ble" name="conn-method" value="ble" style="accent-color: var(--color-violet);"> Bluetooth BLE
+                                    <label
+                                        style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                        <input type="radio" id="conn-method-ble" name="conn-method" value="ble"
+                                            style="accent-color: var(--color-violet);"> Bluetooth BLE
                                     </label>
                                 </div>
                             </div>
                             <div class="flex-between" style="align-items: center;">
                                 <span style="font-size: 0.85rem; color: var(--text-secondary);">Baud Rate:</span>
-                                <select id="esp32-baud-rate" style="padding: 4px 8px; font-size: 0.8rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <select id="esp32-baud-rate"
+                                    style="padding: 4px 8px; font-size: 0.8rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                     <option value="115200" selected>115200 (Default)</option>
                                     <option value="9600">9600</option>
                                     <option value="57600">57600</option>
@@ -270,47 +314,64 @@
                                 </select>
                             </div>
                             <div style="display: flex; gap: 10px;">
-                                <button class="btn btn-primary" id="btn-esp32-connect" onclick="connectESP32()" style="flex: 1; padding: 10px; font-size: 0.85rem;">🔌 Connect Device</button>
-                                <button class="btn btn-secondary" id="btn-esp32-disconnect" onclick="disconnectESP32()" disabled style="padding: 10px; font-size: 0.85rem; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">Disconnect</button>
+                                <button class="btn btn-primary" id="btn-esp32-connect" onclick="connectESP32()"
+                                    style="flex: 1; padding: 10px; font-size: 0.85rem;">🔌 Connect Device</button>
+                                <button class="btn btn-secondary" id="btn-esp32-disconnect" onclick="disconnectESP32()"
+                                    disabled
+                                    style="padding: 10px; font-size: 0.85rem; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">Disconnect</button>
                             </div>
-                            <label class="checkbox-container" style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; cursor: pointer; margin-top: 2px;">
-                                <input type="checkbox" id="esp32-sim-checkbox" style="accent-color: var(--color-violet);">
+                            <label class="checkbox-container"
+                                style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; cursor: pointer; margin-top: 2px;">
+                                <input type="checkbox" id="esp32-sim-checkbox"
+                                    style="accent-color: var(--color-violet);">
                                 <span>Enable Simulation Mode (No Hardware Required)</span>
                             </label>
                         </div>
                     </div>
 
                     <!-- Connection Status & Stream stats -->
-                    <div class="card glass-card esp32-card" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
-                        <h4 style="font-family: var(--font-heading); margin-bottom: 8px; font-weight: 700; font-size: 1.05rem;">📡 Status Telemetry</h4>
+                    <div class="card glass-card esp32-card"
+                        style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                        <h4
+                            style="font-family: var(--font-heading); margin-bottom: 8px; font-weight: 700; font-size: 1.05rem;">
+                            📡 Status Telemetry</h4>
                         <div class="info-list-body" style="font-size: 0.85rem; padding: 0;">
-                            <div class="flex-between" style="padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <div class="flex-between"
+                                style="padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.03);">
                                 <span style="color: var(--text-secondary);">Status:</span>
                                 <span id="esp32-status-badge" class="pipeline-badge badge-idle">Disconnected</span>
                             </div>
-                            <div class="flex-between" style="padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <div class="flex-between"
+                                style="padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.03);">
                                 <span style="color: var(--text-secondary);">Packet Count:</span>
                                 <span id="esp32-packet-count" style="font-family: monospace; font-weight: 600;">0</span>
                             </div>
-                            <div class="flex-between" style="padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <div class="flex-between"
+                                style="padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.03);">
                                 <span style="color: var(--text-secondary);">Sampling Speed:</span>
                                 <span id="esp32-data-rate" style="font-family: monospace; font-weight: 600;">--</span>
                             </div>
 
                             <div class="flex-between" style="padding: 4px 0;">
                                 <span style="color: var(--text-secondary);">🔄 Gyro (gx,gy,gz):</span>
-                                <span id="esp32-imu-gyro" style="font-family: monospace; font-weight: 600; font-size: 0.78rem; color: var(--color-emerald, #10b981);">--</span>
+                                <span id="esp32-imu-gyro"
+                                    style="font-family: monospace; font-weight: 600; font-size: 0.78rem; color: var(--color-emerald, #10b981);">--</span>
                             </div>
                         </div>
                     </div>
 
                     <!-- Recording Panel -->
                     <div class="card glass-card esp32-card" style="padding: 20px;">
-                        <h4 style="font-family: var(--font-heading); margin-bottom: 12px; font-weight: 700; font-size: 1.05rem;">🔴 Dataset Acquisition</h4>
+                        <h4
+                            style="font-family: var(--font-heading); margin-bottom: 12px; font-weight: 700; font-size: 1.05rem;">
+                            🔴 Dataset Acquisition</h4>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
                             <div style="display: flex; gap: 8px;">
-                                <input type="text" id="rec-subject-id" placeholder="Subject ID (e.g. SUB-101)" style="flex: 1; padding: 8px 12px; font-size: 0.85rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: var(--font-body);">
-                                <select id="rec-label" style="width: 175px; padding: 8px; font-size: 0.85rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);" title="Diagnostic Output Label (Auto or Specific)">
+                                <input type="text" id="rec-subject-id" placeholder="Subject ID (e.g. SUB-101)"
+                                    style="flex: 1; padding: 8px 12px; font-size: 0.85rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: var(--font-body);">
+                                <select id="rec-label"
+                                    style="width: 175px; padding: 8px; font-size: 0.85rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);"
+                                    title="Diagnostic Output Label (Auto or Specific)">
                                     <option value="auto" selected>🤖 Auto (Normal / Mod / High)</option>
                                     <option value="normal">Normal</option>
                                     <option value="moderate">Moderate</option>
@@ -318,15 +379,24 @@
                                 </select>
                             </div>
                             <div style="display: flex; gap: 8px;">
-                                
+
                             </div>
                             <div style="display: flex; gap: 10px;">
-                                <button class="btn btn-secondary" id="btn-rec-start" onclick="startRecording()" disabled style="flex: 1; padding: 8px; font-size: 0.85rem; background-color: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4);">🔴 Start Rec</button>
-                                <button class="btn btn-primary" id="btn-rec-stop" onclick="stopRecording()" disabled style="flex: 1; padding: 8px; font-size: 0.85rem; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">⏹️ Stop Rec (<span id="rec-count">0</span>s / 15s)</button>
+                                <button class="btn btn-secondary" id="btn-rec-start" onclick="startRecording()" disabled
+                                    style="flex: 1; padding: 8px; font-size: 0.85rem; background-color: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4);">🔴
+                                    Start Rec</button>
+                                <button class="btn btn-primary" id="btn-rec-stop" onclick="stopRecording()" disabled
+                                    style="flex: 1; padding: 8px; font-size: 0.85rem; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">⏹️
+                                    Stop Rec (<span id="rec-count">0</span>s / 15s)</button>
                             </div>
                             <div style="display: flex; gap: 10px; margin-top: 4px;">
-                                <button class="btn btn-secondary" id="btn-rec-download" onclick="downloadRecordedCSV()" disabled style="flex: 1; padding: 8px; font-size: 0.8rem; background-color: rgba(255, 255, 255, 0.05); color: var(--text-primary); border-color: var(--border-color); display: flex; align-items: center; justify-content: center; gap: 4px;">📥 Download CSV</button>
-                                <a class="btn btn-secondary" href="/api/download/raw" style="flex: 1; padding: 8px; font-size: 0.8rem; background-color: rgba(255, 255, 255, 0.05); color: var(--text-primary); border-color: var(--border-color); text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 4px;">📦 Download All (ZIP)</a>
+                                <button class="btn btn-secondary" id="btn-rec-download" onclick="downloadRecordedCSV()"
+                                    disabled
+                                    style="flex: 1; padding: 8px; font-size: 0.8rem; background-color: rgba(255, 255, 255, 0.05); color: var(--text-primary); border-color: var(--border-color); display: flex; align-items: center; justify-content: center; gap: 4px;">📥
+                                    Download CSV</button>
+                                <a class="btn btn-secondary" href="/api/download/raw"
+                                    style="flex: 1; padding: 8px; font-size: 0.8rem; background-color: rgba(255, 255, 255, 0.05); color: var(--text-primary); border-color: var(--border-color); text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 4px;">📦
+                                    Download All (ZIP)</a>
                             </div>
                         </div>
                     </div>
@@ -338,14 +408,18 @@
                         <h3>ESP32 Live Waveform Monitor</h3>
                         <div class="chart-legend" style="display: flex; gap: 16px;">
                             <div><span class="legend-dot color-finger"></span> Finger PPG (Live)</div>
-                            <div><span class="legend-dot" style="background-color: var(--color-cyan, #06b6d4);"></span> Toe PPG (Live)</div>
+                            <div><span class="legend-dot" style="background-color: var(--color-cyan, #06b6d4);"></span>
+                                Toe PPG (Live)</div>
                         </div>
                     </div>
                     <div class="card-body ppg-chart-container" style="height: 320px; position: relative;">
                         <canvas id="esp32-live-chart"></canvas>
-                        <div id="chart-overlay-message" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(17, 24, 39, 0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; gap: 8px; pointer-events: none; transition: opacity 0.3s ease;">
+                        <div id="chart-overlay-message"
+                            style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(17, 24, 39, 0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; gap: 8px; pointer-events: none; transition: opacity 0.3s ease;">
                             <span style="font-size: 3rem;">📡</span>
-                            <span style="font-family: var(--font-heading); font-weight: 600; color: var(--text-secondary);">Device offline. Connect to start streaming.</span>
+                            <span
+                                style="font-family: var(--font-heading); font-weight: 600; color: var(--text-secondary);">Device
+                                offline. Connect to start streaming.</span>
                         </div>
                     </div>
                 </div>
@@ -353,32 +427,48 @@
                 <!-- Prediction Report Card -->
                 <div class="dashboard-grid" id="esp32-results-grid" style="display: none; margin-top: 24px;">
                     <!-- Gauge and Risk card -->
-                    <div class="card glass-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+                    <div class="card glass-card"
+                        style="display: flex; flex-direction: column; justify-content: space-between;">
                         <div class="card-header flex-between">
                             <h3>Vascular Classifier Assessment</h3>
-                            <span id="esp32-expected-badge" style="font-size: 0.78rem; padding: 3px 10px; border-radius: 8px; font-weight: 600; background: rgba(255,255,255,0.06); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1);">Expected: --</span>
+                            <span id="esp32-expected-badge"
+                                style="font-size: 0.78rem; padding: 3px 10px; border-radius: 8px; font-weight: 600; background: rgba(255,255,255,0.06); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1);">Expected:
+                                --</span>
                         </div>
                         <div class="card-body flex-column flex-center" style="padding: 24px; gap: 16px;">
-                            <div style="position: relative; width: 220px; height: 120px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 8px;">
+                            <div
+                                style="position: relative; width: 220px; height: 120px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 8px;">
                                 <!-- Semi-circular Gauge Chart -->
                                 <canvas id="esp32-risk-gauge" style="width: 220px; height: 110px;"></canvas>
-                                <div style="position: absolute; bottom: 0; display: flex; flex-direction: column; align-items: center;">
-                                    <span id="esp32-risk-pct" style="font-size: 1.8rem; font-weight: 800; font-family: var(--font-heading);">0%</span>
-                                    <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top: -2px;">Risk Score</span>
+                                <div
+                                    style="position: absolute; bottom: 0; display: flex; flex-direction: column; align-items: center;">
+                                    <span id="esp32-risk-pct"
+                                        style="font-size: 1.8rem; font-weight: 800; font-family: var(--font-heading);">0%</span>
+                                    <span
+                                        style="font-size: 0.75rem; color: var(--text-secondary); margin-top: -2px;">Risk
+                                        Score</span>
                                 </div>
                             </div>
                             <div class="text-center">
-                                <h2 id="esp32-result-risk-name" class="pipeline-badge badge-normal" style="font-size: 1.4rem; padding: 6px 20px; border-radius: 12px; margin-bottom: 8px; display: inline-block;">Normal</h2>
-                                
+                                <h2 id="esp32-result-risk-name" class="pipeline-badge badge-normal"
+                                    style="font-size: 1.4rem; padding: 6px 20px; border-radius: 12px; margin-bottom: 8px; display: inline-block;">
+                                    Normal</h2>
+
                                 <!-- Comparison bar: Expected Output vs Predicted Output -->
-                                <div id="esp32-comparison-container" style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; padding: 6px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.82rem;">
-                                    <span>Diagnosis: <strong id="esp32-comp-predicted" style="color: var(--color-emerald);">Normal</strong></span>
+                                <div id="esp32-comparison-container"
+                                    style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; padding: 6px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.82rem;">
+                                    <span>Diagnosis: <strong id="esp32-comp-predicted"
+                                            style="color: var(--color-emerald);">Normal</strong></span>
                                     <span style="color: rgba(255,255,255,0.2);">|</span>
-                                    <span>Output: <strong id="esp32-comp-expected" style="color: var(--color-emerald);">Normal</strong></span>
-                                    <span id="esp32-comp-match" class="pipeline-badge badge-normal" style="font-size: 0.7rem; padding: 2px 8px; border-radius: 6px;">Normal</span>
+                                    <span>Output: <strong id="esp32-comp-expected"
+                                            style="color: var(--color-emerald);">Normal</strong></span>
+                                    <span id="esp32-comp-match" class="pipeline-badge badge-normal"
+                                        style="font-size: 0.7rem; padding: 2px 8px; border-radius: 6px;">Normal</span>
                                 </div>
 
-                                <p style="font-size: 0.85rem; color: var(--text-secondary); max-width: 260px; margin: 0 auto;" id="esp32-result-desc">No indicators of Peripheral Vascular Disease detected. Heart rates and pulse transit latency are within physiological norms.</p>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary); max-width: 260px; margin: 0 auto;"
+                                    id="esp32-result-desc">No indicators of Peripheral Vascular Disease detected. Heart
+                                    rates and pulse transit latency are within physiological norms.</p>
                             </div>
                         </div>
                     </div>
@@ -389,7 +479,9 @@
                             <h3>Recorded Dataset Model Diagnostics</h3>
                         </div>
                         <div class="card-body info-list-body" style="padding: 16px;">
-                            <h4 style="font-family: var(--font-heading); font-size: 0.9rem; font-weight: 700; margin-bottom: 12px; color: var(--color-violet);">Average Extracted Features (Recorded Session)</h4>
+                            <h4
+                                style="font-family: var(--font-heading); font-size: 0.9rem; font-weight: 700; margin-bottom: 12px; color: var(--color-violet);">
+                                Average Extracted Features (Recorded Session)</h4>
                             <table class="data-table compact" style="margin-bottom: 16px;">
                                 <thead>
                                     <tr>
@@ -446,17 +538,22 @@
                                     </tr>
                                 </tbody>
                             </table>
-                            <div style="font-size: 0.8rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px;">
+                            <div
+                                style="font-size: 0.8rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px;">
                                 <div class="flex-between" style="align-items: center; width: 100%;">
                                     <div>
                                         <span style="color: var(--text-secondary);">Saved to Dataset Pool:</span>
                                         <strong id="res-save-status" style="color: var(--color-rose);">No</strong>
                                     </div>
-                                    <span id="res-save-filename" style="font-family: monospace; font-size: 0.75rem; color: var(--text-secondary);"></span>
+                                    <span id="res-save-filename"
+                                        style="font-family: monospace; font-size: 0.75rem; color: var(--text-secondary);"></span>
                                 </div>
-                                
-                                <div id="res-download-container" style="display: none; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px; justify-content: flex-end; width: 100%;">
-                                    <a id="lnk-res-download" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px; border-color: var(--color-cyan); color: var(--color-cyan); text-decoration: none;" href="#" download>📥 Download Saved CSV from Server</a>
+
+                                <div id="res-download-container"
+                                    style="display: none; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px; justify-content: flex-end; width: 100%;">
+                                    <a id="lnk-res-download" class="btn btn-secondary"
+                                        style="padding: 4px 10px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px; border-color: var(--color-cyan); color: var(--color-cyan); text-decoration: none;"
+                                        href="#" download>📥 Download Saved CSV from Server</a>
                                 </div>
                             </div>
                         </div>
@@ -468,26 +565,38 @@
                     <div class="card-header flex-between" style="flex-wrap: wrap; gap: 10px;">
                         <div style="display: flex; align-items: center; gap: 12px;">
                             <h3>📂 Manage & Label Acquired Datasets</h3>
-                            <span id="selected-datasets-badge" style="display: none; background: rgba(6, 182, 212, 0.15); color: var(--color-cyan); border: 1px solid rgba(6, 182, 212, 0.3); padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">0 selected</span>
+                            <span id="selected-datasets-badge"
+                                style="display: none; background: rgba(6, 182, 212, 0.15); color: var(--color-cyan); border: 1px solid rgba(6, 182, 212, 0.3); padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">0
+                                selected</span>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                            <button class="btn btn-secondary" id="btn-batch-share" onclick="shareSelectedDatasets()" style="display: none; padding: 6px 12px; font-size: 0.8rem; background-color: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4);">🔗 Share Selected</button>
-                            <button class="btn btn-secondary" id="btn-batch-delete" onclick="openBatchDeleteModal()" style="display: none; padding: 6px 12px; font-size: 0.8rem; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🗑️ Delete Selected</button>
-                            <button class="btn btn-secondary" id="btn-delete-all" onclick="openDeleteAllModal()" style="padding: 6px 12px; font-size: 0.8rem; background-color: rgba(244, 63, 94, 0.15); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.3);">🗑️ Delete All</button>
-                            <button class="btn btn-secondary" onclick="loadRawDatasets()" style="padding: 6px 12px; font-size: 0.8rem;">🔄 Refresh List</button>
+                            <button class="btn btn-secondary" id="btn-batch-share" onclick="shareSelectedDatasets()"
+                                style="display: none; padding: 6px 12px; font-size: 0.8rem; background-color: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4);">🔗
+                                Share Selected</button>
+                            <button class="btn btn-secondary" id="btn-batch-delete" onclick="openBatchDeleteModal()"
+                                style="display: none; padding: 6px 12px; font-size: 0.8rem; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🗑️
+                                Delete Selected</button>
+                            <button class="btn btn-secondary" id="btn-delete-all" onclick="openDeleteAllModal()"
+                                style="padding: 6px 12px; font-size: 0.8rem; background-color: rgba(244, 63, 94, 0.15); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.3);">🗑️
+                                Delete All</button>
+                            <button class="btn btn-secondary" onclick="loadRawDatasets()"
+                                style="padding: 6px 12px; font-size: 0.8rem;">🔄 Refresh List</button>
                         </div>
                     </div>
                     <div class="card-body">
                         <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px;">
                             Below are the raw data sessions recorded from the ESP32 or uploaded manually.
-                            You can change their clinician/diagnostic label (Normal, Moderate, High), share direct links, or delete them in batch.
+                            You can change their clinician/diagnostic label (Normal, Moderate, High), share direct
+                            links, or delete them in batch.
                         </p>
                         <div class="table-container" style="max-height: 420px; overflow-y: auto;">
                             <table class="data-table compact" id="raw-datasets-table">
                                 <thead>
                                     <tr>
                                         <th style="width: 38px; text-align: center;">
-                                            <input type="checkbox" id="chk-select-all" onchange="toggleSelectAllDatasets(this.checked)" title="Select All" style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--color-cyan); vertical-align: middle;">
+                                            <input type="checkbox" id="chk-select-all"
+                                                onchange="toggleSelectAllDatasets(this.checked)" title="Select All"
+                                                style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--color-cyan); vertical-align: middle;">
                                         </th>
                                         <th>Filename</th>
                                         <th>Subject ID</th>
@@ -500,7 +609,9 @@
                                 </thead>
                                 <tbody id="raw-datasets-list">
                                     <tr>
-                                        <td colspan="8" style="text-align: center; color: var(--text-secondary); padding: 24px;">Loading raw datasets...</td>
+                                        <td colspan="8"
+                                            style="text-align: center; color: var(--text-secondary); padding: 24px;">
+                                            Loading raw datasets...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -517,7 +628,8 @@
                     </div>
                     <div class="card-body table-container">
                         <div class="table-actions">
-                            <input type="text" id="table-search" placeholder="🔍 Search by Subject ID or Label..." oninput="onSearchTable()">
+                            <input type="text" id="table-search" placeholder="🔍 Search by Subject ID or Label..."
+                                oninput="onSearchTable()">
                             <span id="table-search-count" class="table-search-count"></span>
                         </div>
                         <table class="data-table" id="features-table">
@@ -559,53 +671,96 @@
                             <h3>🧠 Training & Evaluation Summary</h3>
                         </div>
                         <div class="card-body">
-                            <div class="stats-overview-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px;">
-                                <div class="stat-card" style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
-                                    <div style="font-size: 2.2rem; font-weight: 700; color: var(--color-emerald); line-height: 1;" id="model-accuracy-val">-%</div>
-                                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">Model Accuracy</div>
+                            <div class="stats-overview-grid"
+                                style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px;">
+                                <div class="stat-card"
+                                    style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
+                                    <div style="font-size: 2.2rem; font-weight: 700; color: var(--color-emerald); line-height: 1;"
+                                        id="model-accuracy-val">-%</div>
+                                    <div
+                                        style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">
+                                        Model Accuracy</div>
                                 </div>
-                                <div class="stat-card" style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
-                                    <div style="font-size: 2.2rem; font-weight: 700; color: var(--color-cyan); line-height: 1;" id="model-epochs-val">-</div>
-                                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">Epochs Run</div>
+                                <div class="stat-card"
+                                    style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
+                                    <div style="font-size: 2.2rem; font-weight: 700; color: var(--color-cyan); line-height: 1;"
+                                        id="model-epochs-val">-</div>
+                                    <div
+                                        style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">
+                                        Epochs Run</div>
                                 </div>
-                                <div class="stat-card" style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
-                                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary); line-height: 1;" id="model-samples-val">- / -</div>
-                                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">Train / Test Split</div>
+                                <div class="stat-card"
+                                    style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary); line-height: 1;"
+                                        id="model-samples-val">- / -</div>
+                                    <div
+                                        style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">
+                                        Train / Test Split</div>
                                 </div>
-                                <div class="stat-card" style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
-                                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary); line-height: 1;" id="model-total-subjects-val">-</div>
-                                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">Total Subjects</div>
+                                <div class="stat-card"
+                                    style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary); line-height: 1;"
+                                        id="model-total-subjects-val">-</div>
+                                    <div
+                                        style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">
+                                        Total Subjects</div>
                                 </div>
                             </div>
-                            
-                            <h4 style="margin-bottom: 12px; font-size: 0.95rem; color: var(--text-primary); border-left: 3px solid var(--color-violet); padding-left: 8px;">Detailed Classification Report</h4>
-                            <table class="data-table compact" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+
+                            <h4
+                                style="margin-bottom: 12px; font-size: 0.95rem; color: var(--text-primary); border-left: 3px solid var(--color-violet); padding-left: 8px;">
+                                Detailed Classification Report</h4>
+                            <table class="data-table compact"
+                                style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
                                 <thead>
                                     <tr>
-                                        <th style="text-align: left; padding: 8px; border-bottom: 1px solid var(--border-color);">Class</th>
-                                        <th style="text-align: right; padding: 8px; border-bottom: 1px solid var(--border-color);">Precision</th>
-                                        <th style="text-align: right; padding: 8px; border-bottom: 1px solid var(--border-color);">Recall</th>
-                                        <th style="text-align: right; padding: 8px; border-bottom: 1px solid var(--border-color);">F1-Score</th>
+                                        <th
+                                            style="text-align: left; padding: 8px; border-bottom: 1px solid var(--border-color);">
+                                            Class</th>
+                                        <th
+                                            style="text-align: right; padding: 8px; border-bottom: 1px solid var(--border-color);">
+                                            Precision</th>
+                                        <th
+                                            style="text-align: right; padding: 8px; border-bottom: 1px solid var(--border-color);">
+                                            Recall</th>
+                                        <th
+                                            style="text-align: right; padding: 8px; border-bottom: 1px solid var(--border-color);">
+                                            F1-Score</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"><span class="pipeline-badge badge-normal" style="padding: 2px 6px; font-size: 0.75rem;">Normal</span></td>
-                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);" id="class-normal-precision">-</td>
-                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);" id="class-normal-recall">-</td>
-                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);" id="class-normal-f1">-</td>
+                                        <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"><span
+                                                class="pipeline-badge badge-normal"
+                                                style="padding: 2px 6px; font-size: 0.75rem;">Normal</span></td>
+                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"
+                                            id="class-normal-precision">-</td>
+                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"
+                                            id="class-normal-recall">-</td>
+                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"
+                                            id="class-normal-f1">-</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"><span class="pipeline-badge badge-moderate" style="padding: 2px 6px; font-size: 0.75rem;">Moderate</span></td>
-                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);" id="class-moderate-precision">-</td>
-                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);" id="class-moderate-recall">-</td>
-                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);" id="class-moderate-f1">-</td>
+                                        <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"><span
+                                                class="pipeline-badge badge-moderate"
+                                                style="padding: 2px 6px; font-size: 0.75rem;">Moderate</span></td>
+                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"
+                                            id="class-moderate-precision">-</td>
+                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"
+                                            id="class-moderate-recall">-</td>
+                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"
+                                            id="class-moderate-f1">-</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"><span class="pipeline-badge badge-high" style="padding: 2px 6px; font-size: 0.75rem;">High</span></td>
-                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);" id="class-high-precision">-</td>
-                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);" id="class-high-recall">-</td>
-                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);" id="class-high-f1">-</td>
+                                        <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"><span
+                                                class="pipeline-badge badge-high"
+                                                style="padding: 2px 6px; font-size: 0.75rem;">High</span></td>
+                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"
+                                            id="class-high-precision">-</td>
+                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"
+                                            id="class-high-recall">-</td>
+                                        <td style="text-align: right; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);"
+                                            id="class-high-f1">-</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -681,13 +836,24 @@
                         <p>Trigger steps sequentially or run the full model lifecycle at once.</p>
                     </div>
                     <div class="pipeline-btn-group">
-                        <button class="btn btn-secondary" id="btn-quick-synthetic" onclick="runPipelineStep('generate_synthetic')">📊 Generate Synthetic Data</button>
-                        <button class="btn btn-primary" id="btn-quick-train" onclick="runPipelineStep('process_and_train')">⚙️ Extract Features & Train</button>
-                        <button class="btn btn-primary" id="btn-run-all" onclick="runPipelineStep('all')">⚡ Run Full Pipeline</button>
-                        <button class="btn btn-step-stop" id="btn-stop-all" onclick="stopPipelineStep()" style="display: none; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🛑 Stop Running Pipeline</button>
-                        <button class="btn btn-secondary" id="btn-download-raw" onclick="downloadRawDataset()" style="background-color: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4);">📥 Download Raw (ZIP)</button>
-                        <button class="btn btn-secondary" id="btn-download-features" onclick="downloadFeaturesDataset()" style="background-color: var(--color-violet-glow); color: var(--color-violet); border-color: rgba(139, 92, 246, 0.4);">📥 Download Features (CSV)</button>
-                        <button class="btn btn-secondary" id="btn-clear-pipeline" onclick="clearPipelineData()" style="background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🗑️ Clear Synthetic Data</button>
+                        <button class="btn btn-secondary" id="btn-quick-synthetic"
+                            onclick="runPipelineStep('generate_synthetic')">📊 Generate Synthetic Data</button>
+                        <button class="btn btn-primary" id="btn-quick-train"
+                            onclick="runPipelineStep('process_and_train')">⚙️ Extract Features & Train</button>
+                        <button class="btn btn-primary" id="btn-run-all" onclick="runPipelineStep('all')">⚡ Run Full
+                            Pipeline</button>
+                        <button class="btn btn-step-stop" id="btn-stop-all" onclick="stopPipelineStep()"
+                            style="display: none; background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🛑
+                            Stop Running Pipeline</button>
+                        <button class="btn btn-secondary" id="btn-download-raw" onclick="downloadRawDataset()"
+                            style="background-color: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4);">📥
+                            Download Raw (ZIP)</button>
+                        <button class="btn btn-secondary" id="btn-download-features" onclick="downloadFeaturesDataset()"
+                            style="background-color: var(--color-violet-glow); color: var(--color-violet); border-color: rgba(139, 92, 246, 0.4);">📥
+                            Download Features (CSV)</button>
+                        <button class="btn btn-secondary" id="btn-clear-pipeline" onclick="clearPipelineData()"
+                            style="background-color: var(--color-rose-glow); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4);">🗑️
+                            Clear Synthetic Data</button>
                     </div>
                 </div>
 
@@ -697,28 +863,43 @@
                         <h3>📂 Upload Custom Dataset</h3>
                     </div>
                     <div class="card-body" style="display: flex; gap: 24px; flex-wrap: wrap;">
-                        <div class="upload-dropzone" id="upload-dropzone-pipeline" style="flex: 1; min-width: 300px; border: 2px dashed rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; background: rgba(255,255,255,0.01); transition: var(--transition-smooth); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+                        <div class="upload-dropzone" id="upload-dropzone-pipeline"
+                            style="flex: 1; min-width: 300px; border: 2px dashed rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; background: rgba(255,255,255,0.01); transition: var(--transition-smooth); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
                             <div class="upload-icon" style="font-size: 2.5rem;">📤</div>
                             <div>
-                                <p style="font-weight: 600; font-family: var(--font-heading); font-size: 1rem; margin-bottom: 4px;">Drag & Drop files here or click to browse</p>
-                                <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0;">Supports multiple CSVs or a single ZIP containing them</p>
+                                <p
+                                    style="font-weight: 600; font-family: var(--font-heading); font-size: 1rem; margin-bottom: 4px;">
+                                    Drag & Drop files here or click to browse</p>
+                                <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0;">Supports multiple
+                                    CSVs or a single ZIP containing them</p>
                             </div>
-                            <input type="file" id="dataset-file-input-pipeline" multiple accept=".csv,.zip" style="display: none;">
+                            <input type="file" id="dataset-file-input-pipeline" multiple accept=".csv,.zip"
+                                style="display: none;">
                         </div>
-                        <div class="upload-options-list" style="width: 320px; display: flex; flex-direction: column; gap: 16px; border-left: 1px solid var(--border-color); padding-left: 24px;">
-                            <h4 style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700;">Upload Settings</h4>
-                            <label class="checkbox-container" style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; cursor: pointer;">
-                                <input type="checkbox" id="upload-clear-checkbox-pipeline" checked style="accent-color: var(--color-violet);">
+                        <div class="upload-options-list"
+                            style="width: 320px; display: flex; flex-direction: column; gap: 16px; border-left: 1px solid var(--border-color); padding-left: 24px;">
+                            <h4 style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700;">Upload
+                                Settings</h4>
+                            <label class="checkbox-container"
+                                style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; cursor: pointer;">
+                                <input type="checkbox" id="upload-clear-checkbox-pipeline" checked
+                                    style="accent-color: var(--color-violet);">
                                 <span>Clear existing raw data before upload</span>
                             </label>
-                            
-                            <div id="selected-files-summary-pipeline" style="display: none; flex-direction: column; gap: 8px; flex-grow: 1;">
-                                <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Selected Files:</div>
-                                <div id="selected-files-list-pipeline" style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 6px; padding: 8px; font-family: monospace; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-color);">
+
+                            <div id="selected-files-summary-pipeline"
+                                style="display: none; flex-direction: column; gap: 8px; flex-grow: 1;">
+                                <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Selected
+                                    Files:</div>
+                                <div id="selected-files-list-pipeline"
+                                    style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 6px; padding: 8px; font-family: monospace; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-color);">
                                 </div>
                             </div>
-                            
-                            <button class="btn btn-primary" id="btn-upload-dataset-pipeline" onclick="uploadDataset('pipeline')" disabled style="width: 100%; display: flex; justify-content: center; align-items: center;">📤 Upload Dataset</button>
+
+                            <button class="btn btn-primary" id="btn-upload-dataset-pipeline"
+                                onclick="uploadDataset('pipeline')" disabled
+                                style="width: 100%; display: flex; justify-content: center; align-items: center;">📤
+                                Upload Dataset</button>
                         </div>
                     </div>
                 </div>
@@ -734,13 +915,16 @@
                                 <div class="step-num">1</div>
                                 <div class="step-details">
                                     <h4>Generate Synthetic Data</h4>
-                                    <code class="clickable-code" onclick="viewCodeFile('generate_synthetic_data.py')" title="Click to view code">generate_synthetic_data.py</code>
+                                    <code class="clickable-code" onclick="viewCodeFile('generate_synthetic_data.py')"
+                                        title="Click to view code">generate_synthetic_data.py</code>
                                     <p>Generates mock dual-site PPG CSV inputs under data/raw/.</p>
                                 </div>
                                 <div class="step-actions">
                                     <span class="pipeline-badge badge-idle" id="badge-step-0">Idle</span>
-                                    <button class="btn btn-step-run" id="btn-run-0" onclick="runPipelineStep('generate_synthetic')">Run</button>
-                                    <button class="btn btn-step-stop" id="btn-stop-0" onclick="stopPipelineStep()" style="display: none;">Stop</button>
+                                    <button class="btn btn-step-run" id="btn-run-0"
+                                        onclick="runPipelineStep('generate_synthetic')">Run</button>
+                                    <button class="btn btn-step-stop" id="btn-stop-0" onclick="stopPipelineStep()"
+                                        style="display: none;">Stop</button>
                                 </div>
                             </div>
 
@@ -748,13 +932,16 @@
                                 <div class="step-num">2</div>
                                 <div class="step-details">
                                     <h4>Preprocess & Segment</h4>
-                                    <code class="clickable-code" onclick="viewCodeFile('data_preprocessing.py')" title="Click to view code">data_preprocessing.py</code>
+                                    <code class="clickable-code" onclick="viewCodeFile('data_preprocessing.py')"
+                                        title="Click to view code">data_preprocessing.py</code>
                                     <p>Filters PPG waveforms and segments them into 8s overlapping windows.</p>
                                 </div>
                                 <div class="step-actions">
                                     <span class="pipeline-badge badge-idle" id="badge-step-1">Idle</span>
-                                    <button class="btn btn-step-run" id="btn-run-1" onclick="runPipelineStep('preprocess')">Run</button>
-                                    <button class="btn btn-step-stop" id="btn-stop-1" onclick="stopPipelineStep()" style="display: none;">Stop</button>
+                                    <button class="btn btn-step-run" id="btn-run-1"
+                                        onclick="runPipelineStep('preprocess')">Run</button>
+                                    <button class="btn btn-step-stop" id="btn-stop-1" onclick="stopPipelineStep()"
+                                        style="display: none;">Stop</button>
                                 </div>
                             </div>
 
@@ -762,13 +949,16 @@
                                 <div class="step-num">3</div>
                                 <div class="step-details">
                                     <h4>Extract Waveform Features</h4>
-                                    <code class="clickable-code" onclick="viewCodeFile('feature_extraction.py')" title="Click to view code">feature_extraction.py</code>
+                                    <code class="clickable-code" onclick="viewCodeFile('feature_extraction.py')"
+                                        title="Click to view code">feature_extraction.py</code>
                                     <p>Derives the 8-feature vectors (PI, HRV, PTT, AI, etc.) per window segment.</p>
                                 </div>
                                 <div class="step-actions">
                                     <span class="pipeline-badge badge-idle" id="badge-step-2">Idle</span>
-                                    <button class="btn btn-step-run" id="btn-run-2" onclick="runPipelineStep('extract_features')">Run</button>
-                                    <button class="btn btn-step-stop" id="btn-stop-2" onclick="stopPipelineStep()" style="display: none;">Stop</button>
+                                    <button class="btn btn-step-run" id="btn-run-2"
+                                        onclick="runPipelineStep('extract_features')">Run</button>
+                                    <button class="btn btn-step-stop" id="btn-stop-2" onclick="stopPipelineStep()"
+                                        style="display: none;">Stop</button>
                                 </div>
                             </div>
 
@@ -776,13 +966,16 @@
                                 <div class="step-num">4</div>
                                 <div class="step-details">
                                     <h4>Train Classifier Model</h4>
-                                    <code class="clickable-code" onclick="viewCodeFile('train_model.py')" title="Click to view code">train_model.py</code>
+                                    <code class="clickable-code" onclick="viewCodeFile('train_model.py')"
+                                        title="Click to view code">train_model.py</code>
                                     <p>Trains standard scaler and sequential MLP model in Keras/TensorFlow.</p>
                                 </div>
                                 <div class="step-actions">
                                     <span class="pipeline-badge badge-idle" id="badge-step-3">Idle</span>
-                                    <button class="btn btn-step-run" id="btn-run-3" onclick="runPipelineStep('train_model')">Run</button>
-                                    <button class="btn btn-step-stop" id="btn-stop-3" onclick="stopPipelineStep()" style="display: none;">Stop</button>
+                                    <button class="btn btn-step-run" id="btn-run-3"
+                                        onclick="runPipelineStep('train_model')">Run</button>
+                                    <button class="btn btn-step-stop" id="btn-stop-3" onclick="stopPipelineStep()"
+                                        style="display: none;">Stop</button>
                                 </div>
                             </div>
 
@@ -790,13 +983,17 @@
                                 <div class="step-num">5</div>
                                 <div class="step-details">
                                     <h4>Quantize & Export TFLite</h4>
-                                    <code class="clickable-code" onclick="viewCodeFile('convert_to_tflite.py')" title="Click to view code">convert_to_tflite.py</code>
-                                    <p>Performs full integer quantization and generates firmware model_data.h header.</p>
+                                    <code class="clickable-code" onclick="viewCodeFile('convert_to_tflite.py')"
+                                        title="Click to view code">convert_to_tflite.py</code>
+                                    <p>Performs full integer quantization and generates firmware model_data.h header.
+                                    </p>
                                 </div>
                                 <div class="step-actions">
                                     <span class="pipeline-badge badge-idle" id="badge-step-4">Idle</span>
-                                    <button class="btn btn-step-run" id="btn-run-4" onclick="runPipelineStep('convert_tflite')">Run</button>
-                                    <button class="btn btn-step-stop" id="btn-stop-4" onclick="stopPipelineStep()" style="display: none;">Stop</button>
+                                    <button class="btn btn-step-run" id="btn-run-4"
+                                        onclick="runPipelineStep('convert_tflite')">Run</button>
+                                    <button class="btn btn-step-stop" id="btn-stop-4" onclick="stopPipelineStep()"
+                                        style="display: none;">Stop</button>
                                 </div>
                             </div>
                         </div>
@@ -815,7 +1012,8 @@
                             </div>
                         </div>
                         <div class="card-body console-body-container">
-                            <pre class="terminal-body" id="pipeline-terminal">> Console loaded. Ready to run scripts...</pre>
+                            <pre class="terminal-body"
+                                id="pipeline-terminal">> Console loaded. Ready to run scripts...</pre>
                         </div>
                     </div>
                 </div>
@@ -825,25 +1023,33 @@
 
     <!-- Confirm Delete Modal (Single, Batch, All) -->
     <div id="delete-confirm-modal" class="modal-overlay" onclick="closeDeleteModal(event)">
-        <div class="modal-content glass-card" style="max-width: 460px; border: 1px solid rgba(244, 63, 94, 0.25);" onclick="event.stopPropagation()">
+        <div class="modal-content glass-card" style="max-width: 460px; border: 1px solid rgba(244, 63, 94, 0.25);"
+            onclick="event.stopPropagation()">
             <div class="modal-header" style="border-bottom: 1px solid rgba(244, 63, 94, 0.15);">
                 <h3 id="delete-modal-title">🗑️ Delete Raw Dataset</h3>
                 <button class="modal-close-btn" onclick="closeDeleteModal()">×</button>
             </div>
             <div class="modal-body" style="padding-top: 16px;">
-                <p id="delete-modal-message">Are you sure you want to permanently delete the raw dataset <strong id="delete-modal-filename" style="color: var(--color-rose);"></strong> from the server?</p>
-                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 8px;">This action is destructive and cannot be undone.</p>
+                <p id="delete-modal-message">Are you sure you want to permanently delete the raw dataset <strong
+                        id="delete-modal-filename" style="color: var(--color-rose);"></strong> from the server?</p>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 8px;">This action is destructive
+                    and cannot be undone.</p>
             </div>
-            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 16px;">
-                <button class="btn btn-secondary" onclick="closeDeleteModal()" style="padding: 8px 16px;">Cancel</button>
-                <button class="btn btn-danger" id="btn-modal-confirm-delete" onclick="executeDeleteAction()" style="background-color: var(--color-rose); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: 'Inter', sans-serif;">Confirm Delete</button>
+            <div class="modal-footer"
+                style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()"
+                    style="padding: 8px 16px;">Cancel</button>
+                <button class="btn btn-danger" id="btn-modal-confirm-delete" onclick="executeDeleteAction()"
+                    style="background-color: var(--color-rose); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: 'Inter', sans-serif;">Confirm
+                    Delete</button>
             </div>
         </div>
     </div>
 
     <!-- Share Dataset Modal -->
     <div id="share-modal" class="modal-overlay" onclick="closeShareModal(event)">
-        <div class="modal-content glass-card" style="max-width: 480px; border: 1px solid rgba(6, 182, 212, 0.3);" onclick="event.stopPropagation()">
+        <div class="modal-content glass-card" style="max-width: 480px; border: 1px solid rgba(6, 182, 212, 0.3);"
+            onclick="event.stopPropagation()">
             <div class="modal-header" style="border-bottom: 1px solid rgba(6, 182, 212, 0.15);">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 1.25rem;">🔗</span>
@@ -853,27 +1059,40 @@
             </div>
             <div class="modal-body" style="padding-top: 16px; display: flex; flex-direction: column; gap: 16px;">
                 <div>
-                    <span style="font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Dataset Filename</span>
-                    <p id="share-modal-filename" style="font-family: monospace; font-size: 0.95rem; color: var(--color-cyan); margin-top: 4px; word-break: break-all;"></p>
+                    <span
+                        style="font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Dataset
+                        Filename</span>
+                    <p id="share-modal-filename"
+                        style="font-family: monospace; font-size: 0.95rem; color: var(--color-cyan); margin-top: 4px; word-break: break-all;">
+                    </p>
                 </div>
                 <div>
-                    <span style="font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Direct Download & Share Link</span>
+                    <span
+                        style="font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Direct
+                        Download & Share Link</span>
                     <div style="display: flex; gap: 8px; margin-top: 6px;">
-                        <input type="text" id="share-modal-link-input" readonly style="flex: 1; padding: 8px 12px; font-size: 0.8rem; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
-                        <button class="btn btn-secondary" id="btn-copy-share-link" onclick="copyShareModalLink()" style="padding: 8px 14px; font-size: 0.8rem; background: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4); white-space: nowrap; cursor: pointer;">📋 Copy</button>
+                        <input type="text" id="share-modal-link-input" readonly
+                            style="flex: 1; padding: 8px 12px; font-size: 0.8rem; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
+                        <button class="btn btn-secondary" id="btn-copy-share-link" onclick="copyShareModalLink()"
+                            style="padding: 8px 14px; font-size: 0.8rem; background: var(--color-cyan-glow); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.4); white-space: nowrap; cursor: pointer;">📋
+                            Copy</button>
                     </div>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 4px;">
-                    <button class="btn btn-secondary" id="btn-native-share" onclick="triggerNativeShare()" style="flex: 1; padding: 9px; font-size: 0.85rem; background: rgba(255, 255, 255, 0.05); color: var(--text-primary); border-color: var(--border-color); display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
+                    <button class="btn btn-secondary" id="btn-native-share" onclick="triggerNativeShare()"
+                        style="flex: 1; padding: 9px; font-size: 0.85rem; background: rgba(255, 255, 255, 0.05); color: var(--text-primary); border-color: var(--border-color); display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
                         <span>📲</span> Share via App
                     </button>
-                    <a id="btn-share-direct-download" href="#" class="btn btn-secondary" download style="flex: 1; padding: 9px; font-size: 0.85rem; background: rgba(16, 185, 129, 0.15); color: var(--color-emerald); border-color: rgba(16, 185, 129, 0.3); text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
+                    <a id="btn-share-direct-download" href="#" class="btn btn-secondary" download
+                        style="flex: 1; padding: 9px; font-size: 0.85rem; background: rgba(16, 185, 129, 0.15); color: var(--color-emerald); border-color: rgba(16, 185, 129, 0.3); text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
                         <span>📥</span> Download CSV
                     </a>
                 </div>
             </div>
-            <div class="modal-footer" style="display: flex; justify-content: flex-end; margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 14px;">
-                <button class="btn btn-secondary" onclick="closeShareModal()" style="padding: 6px 16px; cursor: pointer;">Close</button>
+            <div class="modal-footer"
+                style="display: flex; justify-content: flex-end; margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+                <button class="btn btn-secondary" onclick="closeShareModal()"
+                    style="padding: 6px 16px; cursor: pointer;">Close</button>
             </div>
         </div>
     </div>
@@ -894,4 +1113,5 @@
         </div>
     </div>
 </body>
+
 </html>

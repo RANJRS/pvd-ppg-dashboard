@@ -873,3 +873,34 @@ body {
     50% { opacity: 1; }
     100% { opacity: 0.6; }
 }
+
+/* ESP32 Acquisition tab styling */
+.esp32-card {
+    transition: transform var(--transition-smooth), border-color var(--transition-smooth);
+}
+.esp32-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(139, 92, 246, 0.25);
+}
+#esp32-status-badge.badge-connected {
+    background-color: var(--color-emerald-glow);
+    color: var(--color-emerald);
+    border-color: rgba(16, 185, 129, 0.4);
+}
+#esp32-status-badge.badge-recording {
+    background-color: var(--color-rose-glow);
+    color: var(--color-rose);
+    border-color: rgba(244, 63, 94, 0.4);
+    animation: pulse-blink 1s infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.spin {
+    display: inline-block;
+    animation: spin 0.8s linear infinite;
+}
+

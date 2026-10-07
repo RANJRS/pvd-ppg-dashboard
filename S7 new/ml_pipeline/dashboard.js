@@ -71,21 +71,55 @@ function switchTab(tabId) {
 // Reload Dashboard Telemetry and Datasets
 async function reloadData() {
     console.log("[Dashboard] Reloading data...");
+    const reloadBtn = document.getElementById("btn-reload-data");
+    const origHtml = reloadBtn ? reloadBtn.innerHTML : "🔄 Reload Data";
+    if (reloadBtn) {
+        reloadBtn.disabled = true;
+        reloadBtn.innerHTML = '<span class="spin">🔄</span> Reloading...';
+    }
     
-    // Fetch Pipeline config from python files
-    fetchPipelineConfig();
+    try {
+        // Fetch Pipeline config from python files
+        await fetchPipelineConfig();
 
-    // Load datasets
-    await Promise.all([
-        loadProcessedData(),
-        loadFeatureData(),
-        loadScalerData(),
-        loadModelReport(),
-        loadRawDatasets()
-    ]);
+        // Load datasets
+        await Promise.all([
+            loadProcessedData(),
+            loadFeatureData(),
+            loadScalerData(),
+            loadModelReport(),
+            loadRawDatasets()
+        ]);
 
-    // Recalculate stats and re-draw Overview charts
-    calculateOverviewStats();
+        // Recalculate stats and re-draw Overview charts
+        try { calculateOverviewStats(); } catch (e) { console.warn(e); }
+        
+        // Refresh currently active tab's views
+        if (activeTab === "waveforms") {
+            try { populateSubjectSelect(); } catch (e) {}
+        } else if (activeTab === "esp32") {
+            try { await loadRawDatasets(); } catch (e) {}
+        } else if (activeTab === "features") {
+            try { displayFeatureTable(featureData); } catch (e) {}
+        }
+
+        if (reloadBtn) {
+            reloadBtn.innerHTML = '✅ Refreshed!';
+            setTimeout(() => {
+                reloadBtn.disabled = false;
+                reloadBtn.innerHTML = origHtml;
+            }, 1200);
+        }
+    } catch (err) {
+        console.error("[Dashboard] Error reloading data:", err);
+        if (reloadBtn) {
+            reloadBtn.innerHTML = '⚠️ Retry';
+            setTimeout(() => {
+                reloadBtn.disabled = false;
+                reloadBtn.innerHTML = origHtml;
+            }, 1500);
+        }
+    }
 }
 
 // Fetch Pipeline Config variables
@@ -1097,11 +1131,49 @@ function toggleTheme() {
     const themeBtn = document.getElementById("theme-toggle-btn");
     if (themeBtn) {
         themeBtn.innerText = newTheme === "dark" ? "☀️" : "🌙";
+        themeBtn.setAttribute("title", newTheme === "dark" ? "Switch to Light Theme" : "Switch to Dark Theme");
     }
     
-    // Re-draw charts with updated theme colors
-    calculateOverviewStats();
-    onWindowChange();
+    // Safely re-draw overview charts with updated theme colors
+    try {
+        if (typeof calculateOverviewStats === "function") {
+            calculateOverviewStats();
+        }
+    } catch (e) {
+        console.warn("[Theme] Overview chart refresh:", e);
+    }
+
+    // Safely update waveform viewer
+    try {
+        if (typeof onWindowChange === "function") {
+            onWindowChange();
+        }
+    } catch (e) {
+        console.warn("[Theme] Waveform chart refresh:", e);
+    }
+
+    // Update ESP32 Live monitor scale colors
+    try {
+        if (esp32LiveChart) {
+            const colors = getComputedStyle(document.documentElement);
+            const textThemeColor = colors.getPropertyValue("--text-primary").trim();
+            const borderThemeColor = colors.getPropertyValue("--border-color").trim();
+            if (esp32LiveChart.options.scales.x) {
+                esp32LiveChart.options.scales.x.title.color = textThemeColor;
+                esp32LiveChart.options.scales.x.ticks.color = textThemeColor;
+                esp32LiveChart.options.scales.x.grid.color = borderThemeColor;
+            }
+            if (esp32LiveChart.options.scales.yFinger) {
+                esp32LiveChart.options.scales.yFinger.grid.color = borderThemeColor;
+            }
+            if (esp32LiveChart.options.plugins && esp32LiveChart.options.plugins.legend) {
+                esp32LiveChart.options.plugins.legend.labels.color = textThemeColor;
+            }
+            esp32LiveChart.update('none');
+        }
+    } catch (e) {
+        console.warn("[Theme] Live chart refresh:", e);
+    }
 }
 
 // Synchronize theme icon on load
@@ -1111,6 +1183,7 @@ function toggleTheme() {
         const themeBtn = document.getElementById("theme-toggle-btn");
         if (themeBtn) {
             themeBtn.innerText = savedTheme === "dark" ? "☀️" : "🌙";
+            themeBtn.setAttribute("title", savedTheme === "dark" ? "Switch to Light Theme" : "Switch to Dark Theme");
         }
     });
 })();
