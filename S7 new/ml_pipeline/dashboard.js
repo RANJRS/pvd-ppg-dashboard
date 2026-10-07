@@ -1720,11 +1720,57 @@ function downloadRecordedCSV() {
     console.log(`[ESP32] Dataset downloaded locally: ${filename}`);
 }
 
+// Send command to ESP32 (supports Web Serial, Web Bluetooth, and Backend API)
+async function sendDeviceCommand(cmd) {
+    console.log(`[ESP32] Dispatching command: ${cmd}`);
+    // 1. Web Serial (USB)
+    if (esp32SerialPort && esp32SerialPort.writable) {
+        try {
+            const encoder = new TextEncoder();
+            const writer = esp32SerialPort.writable.getWriter();
+            await writer.write(encoder.encode(cmd + "\n"));
+            writer.releaseLock();
+            console.log(`[ESP32] Sent serial command: ${cmd}`);
+        } catch (e) {
+            console.warn("[ESP32] Serial command error:", e);
+        }
+    }
+    // 2. Web Bluetooth (BLE)
+    if (esp32BleRxChar) {
+        try {
+            const encoder = new TextEncoder();
+            await esp32BleRxChar.writeValue(encoder.encode(cmd + "\n"));
+            console.log(`[ESP32] Sent BLE command: ${cmd}`);
+        } catch (e) {
+            console.warn("[ESP32] BLE command error:", e);
+        }
+    }
+    // 3. Cloud/Local Backend API (for WiFi-connected ESP32)
+    const isStart = cmd.startsWith("START");
+    const subIdEl = document.getElementById("rec-subject-id");
+    const subId = subIdEl ? subIdEl.value.trim() : "PVD_PATCH_001";
+    const lblEl = document.getElementById("rec-label");
+    const lbl = lblEl ? lblEl.value : "normal";
+    try {
+        fetch("/api/recording/" + (isStart ? "start" : "stop"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                subject_id: subId || "PVD_PATCH_001",
+                label: lbl
+            })
+        }).catch(err => console.warn("[ESP32] Cloud API command notification error:", err));
+    } catch (e) {}
+}
+
 // Start Acquisition recording
 function startRecording() {
     isRecording = true;
     recordedSamples = [];
     recordStartTime = Date.now();
+
+    // Notify ESP32 to turn sensors ON and begin acquisition!
+    sendDeviceCommand("START_REC");
     
     // Update Badge State to blink recording
     const statusBadge = document.getElementById("esp32-status-badge");
@@ -1756,6 +1802,10 @@ function startRecording() {
 // Stop Acquisition recording & run prediction
 async function stopRecording() {
     isRecording = false;
+
+    // Notify ESP32 to stop acquisition and turn sensors OFF!
+    sendDeviceCommand("STOP_REC");
+
     if (recordTimerInterval) {
         clearInterval(recordTimerInterval);
         recordTimerInterval = null;

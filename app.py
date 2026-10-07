@@ -43,6 +43,46 @@ def static_files(filename):
     return send_from_directory(PIPELINE_DIR, filename)
 
 # =====================================================
+# ESP32 ACQUISITION CONTROL (/api/recording/start, stop, status)
+# =====================================================
+recording_state = {
+    "recording": False,
+    "subject_id": "PVD_PATCH_001",
+    "label": "normal"
+}
+
+@app.route("/api/recording/status", methods=["GET"])
+def api_recording_status():
+    return jsonify(recording_state), 200
+
+@app.route("/api/recording/start", methods=["POST", "OPTIONS"])
+def api_recording_start():
+    if request.method == "OPTIONS":
+        resp = app.make_default_options_response()
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        return resp
+    data = request.get_json(silent=True) or {}
+    recording_state["recording"] = True
+    recording_state["subject_id"] = data.get("subject_id", "PVD_PATCH_001")
+    recording_state["label"] = data.get("label", "normal")
+    print(f"[RECORDING] Started: {recording_state['subject_id']} ({recording_state['label']})")
+    return jsonify({"status": "recording_started", **recording_state}), 200
+
+@app.route("/api/recording/stop", methods=["POST", "OPTIONS"])
+def api_recording_stop():
+    if request.method == "OPTIONS":
+        resp = app.make_default_options_response()
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        return resp
+    recording_state["recording"] = False
+    print("[RECORDING] Stopped")
+    return jsonify({"status": "recording_stopped"}), 200
+
+# =====================================================
 # ESP32 PPG DATA RECEIVER
 # =====================================================
 @app.route("/api/ppg", methods=["POST", "OPTIONS"])
@@ -88,6 +128,7 @@ def receive_ppg():
         # Count samples
         lines = [l for l in csv_text.strip().split("\n") if l]
         samples = max(0, len(lines) - 1)  # subtract header
+        recording_state["recording"] = False
         print(f"[PPG] Received {samples} samples from {device_id} -> {filename}")
         return jsonify({
             "status": "success",

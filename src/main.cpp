@@ -1,10 +1,6 @@
 #include "MAX30105.h"
+
 #include <Arduino.h>
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-#include <BLE2902.h>
-#include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <Wire.h>
@@ -13,123 +9,32 @@
 // WIFI
 // =====================================================
 
+// KEEP YOUR EXISTING WIFI DETAILS HERE
 const char *WIFI_SSID = "Ranji";
 const char *WIFI_PASSWORD = "12345678";
 
-// Your Render API
-const char *SERVER_URL = "https://pvd-ppg-dashboard.onrender.com";
+const char *SERVER_URL = "https://pvd-ppg-dashboard.onrender.com/api/ppg";
 
 // =====================================================
-// BLE SETTINGS (Nordic UART Service standard)
-// =====================================================
-#define BLE_DEVICE_NAME        "PVD-Patch"
-#define SERVICE_UUID           "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
-#define CHARACTERISTIC_UUID_RX "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
-#define CHARACTERISTIC_UUID_TX "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
-
-BLEServer *pServer = nullptr;
-BLECharacteristic *pTxCharacteristic = nullptr;
-bool deviceConnected = false;
-bool oldDeviceConnected = false;
-
-class MyServerCallbacks : public BLEServerCallbacks {
-  void onConnect(BLEServer *pServer) override {
-    deviceConnected = true;
-    Serial.println("[BLE] Client Connected!");
-  }
-
-  void onDisconnect(BLEServer *pServer) override {
-    deviceConnected = false;
-    Serial.println("[BLE] Client Disconnected!");
-  }
-};
-
-class MyRxCallbacks : public BLECharacteristicCallbacks {
-  void onWrite(BLECharacteristic *pCharacteristic) override {
-    String rxValue = pCharacteristic->getValue().c_str();
-    if (rxValue.length() > 0) {
-      Serial.print("[BLE RX]: ");
-      Serial.println(rxValue);
-    }
-  }
-};
-
-void initBLE() {
-  BLEDevice::init(BLE_DEVICE_NAME);
-  pServer = BLEDevice::createServer();
-  pServer->setCallbacks(new MyServerCallbacks());
-
-  BLEService *pService = pServer->createService(SERVICE_UUID);
-
-  pTxCharacteristic = pService->createCharacteristic(
-      CHARACTERISTIC_UUID_TX,
-      BLECharacteristic::PROPERTY_NOTIFY
-  );
-  pTxCharacteristic->addDescriptor(new BLE2902());
-
-  BLECharacteristic *pRxCharacteristic = pService->createCharacteristic(
-      CHARACTERISTIC_UUID_RX,
-      BLECharacteristic::PROPERTY_WRITE
-  );
-  pRxCharacteristic->setCallbacks(new MyRxCallbacks());
-
-  pService->start();
-
-  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(SERVICE_UUID);
-  pAdvertising->setScanResponse(true);
-  pAdvertising->setMinPreferred(0x06); // 7.5 ms connection interval
-  pAdvertising->setMaxPreferred(0x10); // 20 ms connection interval
-  BLEDevice::startAdvertising();
-
-  Serial.println("[BLE] High-speed advertising started as 'PVD-Patch'!");
-}
-
-// Low-latency BLE batching buffer (flushes every 20ms to match BLE radio slots)
-static char bleBuffer[256];
-static int bleBufferLen = 0;
-static unsigned long lastBleFlush = 0;
-
-void flushBleStream() {
-  if (deviceConnected && pTxCharacteristic != nullptr && bleBufferLen > 0) {
-    pTxCharacteristic->setValue((uint8_t*)bleBuffer, bleBufferLen);
-    pTxCharacteristic->notify();
-    bleBufferLen = 0;
-    lastBleFlush = millis();
-  }
-}
-
-void streamTelemetry(unsigned long ts, unsigned long ir, float gx, float gy, float gz) {
-  char packet[64];
-  int len = snprintf(packet, sizeof(packet), "DATA,%lu,%lu,%.2f,%.2f,%.2f\n",
-                     ts, ir, gx, gy, gz);
-
-  // 1. USB Serial output (immediate)
-  Serial.print(packet);
-
-  // 2. BLE notify (batched to prevent radio queue congestion)
-  if (deviceConnected && pTxCharacteristic != nullptr) {
-    if (bleBufferLen + len >= (int)sizeof(bleBuffer)) {
-      flushBleStream();
-    }
-    memcpy(bleBuffer + bleBufferLen, packet, len);
-    bleBufferLen += len;
-
-    // Flush every 4 samples (~20ms) or if buffer has >= 120 bytes
-    if (bleBufferLen >= 120 || (millis() - lastBleFlush) >= 20) {
-      flushBleStream();
-    }
-  }
-}
-
-// =====================================================
-// I2C
+// I2C BUS 0
+// Finger MAX30102 + MPU6500
 // =====================================================
 
 #define SDA_PIN 8
 #define SCL_PIN 9
 
-#define MPU6500_ADDR 0x68
+#define MPU6500_ADDR ((uint8_t)0x68)
+
+// =====================================================
+// I2C BUS 1
+// Toe MAX30100
+// =====================================================
+
+#define TOE_SDA 4
+#define TOE_SCL 5
+#define MAX30100_ADDR ((uint8_t)0x57)
+
+TwoWire WireToe = TwoWire(1);
 
 // =====================================================
 // DATA SETTINGS
@@ -157,13 +62,146 @@ MAX30105 max30102;
 #define WHO_AM_I_REG 0x75
 
 // =====================================================
-// CSV STORAGE
+// CSV
 // =====================================================
 
 String csvData;
 
 // =====================================================
-// MPU6500 FUNCTIONS
+// MAX30100 REGISTERS
+// =====================================================
+
+#define MAX30100_FIFO_WR_PTR 0x02
+#define MAX30100_FIFO_OVF_CTR 0x03
+#define MAX30100_FIFO_RD_PTR 0x04
+#define MAX30100_FIFO_DATA 0x05
+#define MAX30100_MODE_CONFIG 0x06
+#define MAX30100_SPO2_CONFIG 0x07
+#define MAX30100_LED_CONFIG 0x09
+#define MAX30100_PART_ID 0xFF
+
+// =====================================================
+// MAX30100 LOW LEVEL FUNCTIONS
+// =====================================================
+
+void max30100Write(uint8_t reg, uint8_t value) {
+  WireToe.beginTransmission(MAX30100_ADDR);
+  WireToe.write(reg);
+  WireToe.write(value);
+  WireToe.endTransmission();
+}
+
+uint8_t max30100Read(uint8_t reg) {
+  WireToe.beginTransmission(MAX30100_ADDR);
+  WireToe.write(reg);
+
+  if (WireToe.endTransmission(false) != 0)
+    return 0;
+
+  WireToe.requestFrom(MAX30100_ADDR, (uint8_t)1);
+
+  if (WireToe.available())
+    return WireToe.read();
+
+  return 0;
+}
+
+bool initMAX30100() {
+  Serial.println();
+  Serial.println("Initializing MAX30100...");
+
+  WireToe.begin(TOE_SDA, TOE_SCL, 400000);
+
+  delay(50);
+
+  uint8_t partID = max30100Read(MAX30100_PART_ID);
+
+  Serial.print("MAX30100 PART ID = 0x");
+  Serial.println(partID, HEX);
+
+  if (partID != 0x11) {
+    Serial.println("MAX30100 NOT DETECTED");
+    return false;
+  }
+
+  // Reset
+  max30100Write(MAX30100_MODE_CONFIG, 0x40);
+  delay(20);
+
+  // SPO2 + Heart Rate mode
+  max30100Write(MAX30100_MODE_CONFIG, 0x03);
+
+  // 200 Hz + 800 us pulse width + high resolution
+  //
+  // bits 4:2 = 011 -> 200 Hz
+  // bits 1:0 = 10  -> 800 us
+  // bit 6     = 1   -> high resolution
+  //
+  max30100Write(MAX30100_SPO2_CONFIG, 0x6E);
+
+  // IR = 27.1 mA
+  // RED = 27.1 mA
+  max30100Write(MAX30100_LED_CONFIG, 0x88);
+
+  // Clear FIFO
+  max30100Write(MAX30100_FIFO_WR_PTR, 0x00);
+  max30100Write(MAX30100_FIFO_OVF_CTR, 0x00);
+  max30100Write(MAX30100_FIFO_RD_PTR, 0x00);
+
+  Serial.println("MAX30100 INITIALIZED");
+  Serial.println("MAX30100: 200 Hz");
+  Serial.println("MAX30100: 800 us pulse width");
+
+  return true;
+}
+
+// =====================================================
+// READ LATEST MAX30100 SAMPLE
+// =====================================================
+
+bool readMAX30100(uint16_t &ir, uint16_t &red) {
+  uint8_t writePtr = max30100Read(MAX30100_FIFO_WR_PTR);
+
+  uint8_t readPtr = max30100Read(MAX30100_FIFO_RD_PTR);
+
+  uint8_t count = (writePtr - readPtr) & 0x0F;
+
+  if (count == 0)
+    return false;
+
+  uint8_t buffer[64];
+
+  uint8_t bytesToRead = count * 4;
+
+  WireToe.beginTransmission(MAX30100_ADDR);
+  WireToe.write(MAX30100_FIFO_DATA);
+
+  if (WireToe.endTransmission(false) != 0)
+    return false;
+
+  WireToe.requestFrom(MAX30100_ADDR, bytesToRead);
+
+  uint8_t received = 0;
+
+  while (WireToe.available() && received < bytesToRead) {
+    buffer[received++] = WireToe.read();
+  }
+
+  if (received < 4)
+    return false;
+
+  // Use the newest sample
+  uint8_t index = (count - 1) * 4;
+
+  ir = ((uint16_t)buffer[index] << 8) | buffer[index + 1];
+
+  red = ((uint16_t)buffer[index + 2] << 8) | buffer[index + 3];
+
+  return true;
+}
+
+// =====================================================
+// MPU6500
 // =====================================================
 
 void writeMPU(uint8_t reg, uint8_t value) {
@@ -178,7 +216,7 @@ uint8_t readMPU(uint8_t reg) {
   Wire.write(reg);
   Wire.endTransmission(false);
 
-  Wire.requestFrom(MPU6500_ADDR, 1);
+  Wire.requestFrom(MPU6500_ADDR, (uint8_t)1);
 
   if (Wire.available())
     return Wire.read();
@@ -195,17 +233,15 @@ bool initMPU6500() {
   if (id != 0x70)
     return false;
 
-  // Wake sensor
   writeMPU(PWR_MGMT_1, 0x00);
   delay(100);
 
-  // Low-pass filter
   writeMPU(CONFIG_REG, 0x03);
 
-  // Gyroscope ±500 deg/s
+  // ±500 dps
   writeMPU(GYRO_CONFIG, 0x08);
 
-  // Accelerometer ±4g
+  // ±4g
   writeMPU(ACCEL_CONFIG, 0x08);
 
   return true;
@@ -219,21 +255,25 @@ bool readMPU6500(float &ax, float &ay, float &az, float &gx, float &gy,
   if (Wire.endTransmission(false) != 0)
     return false;
 
-  Wire.requestFrom(MPU6500_ADDR, 14);
+  Wire.requestFrom(MPU6500_ADDR, (uint8_t)14);
 
   if (Wire.available() < 14)
     return false;
 
   int16_t rawAx = (Wire.read() << 8) | Wire.read();
+
   int16_t rawAy = (Wire.read() << 8) | Wire.read();
+
   int16_t rawAz = (Wire.read() << 8) | Wire.read();
 
-  // Skip temperature
+  // Temperature
   Wire.read();
   Wire.read();
 
   int16_t rawGx = (Wire.read() << 8) | Wire.read();
+
   int16_t rawGy = (Wire.read() << 8) | Wire.read();
+
   int16_t rawGz = (Wire.read() << 8) | Wire.read();
 
   // ±4g
@@ -241,7 +281,7 @@ bool readMPU6500(float &ax, float &ay, float &az, float &gx, float &gy,
   ay = rawAy / 8192.0;
   az = rawAz / 8192.0;
 
-  // ±500 deg/s
+  // ±500 dps
   gx = rawGx / 65.5;
   gy = rawGy / 65.5;
   gz = rawGz / 65.5;
@@ -259,10 +299,11 @@ bool connectWiFi() {
   Serial.println("CONNECTING TO WIFI");
   Serial.println("==========================================");
 
-  Serial.print("SSID: ");
-  Serial.println(WIFI_SSID);
-
   WiFi.mode(WIFI_STA);
+
+  WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, IPAddress(8, 8, 8, 8),
+              IPAddress(1, 1, 1, 1));
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   int attempts = 0;
@@ -275,17 +316,17 @@ bool connectWiFi() {
 
   Serial.println();
 
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("WIFI CONNECTED");
-    Serial.print("IP ADDRESS: ");
-    Serial.println(WiFi.localIP());
-
-    return true;
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WIFI CONNECTION FAILED");
+    return false;
   }
 
-  Serial.println("WIFI CONNECTION FAILED");
+  Serial.println("WIFI CONNECTED");
 
-  return false;
+  Serial.print("IP ADDRESS: ");
+  Serial.println(WiFi.localIP());
+
+  return true;
 }
 
 // =====================================================
@@ -309,145 +350,338 @@ bool sendDataToDashboard() {
 
   WiFiClientSecure client;
 
-  // Prototype mode.
-  // Render uses HTTPS.
   client.setInsecure();
-
-  HTTPClient https;
 
   Serial.println("Connecting to Render...");
 
-  if (!https.begin(client, SERVER_URL)) {
+  if (!client.connect("pvd-ppg-dashboard.onrender.com", 443)) {
     Serial.println("HTTPS CONNECTION FAILED");
+    client.stop();
     return false;
   }
 
-  https.setTimeout(30000);
+  Serial.println("Render connected.");
 
-  // Tell Flask that we are sending raw CSV
-  https.addHeader("Content-Type", "text/csv");
-  https.addHeader("X-Device-ID", "PVD_PATCH_001");
+  client.print("POST /api/ppg HTTP/1.1\r\n");
 
-  Serial.println("Uploading 1600 samples...");
+  client.print("Host: pvd-ppg-dashboard.onrender.com\r\n");
 
-  int httpCode = https.POST(csvData);
+  client.print("Content-Type: text/csv\r\n");
 
-  Serial.print("HTTP response: ");
-  Serial.println(httpCode);
+  client.print("X-Device-ID: PVD_PATCH_001\r\n");
 
-  if (httpCode > 0) {
-    String response = https.getString();
+  client.print("Content-Length: ");
+  client.print(csvData.length());
+  client.print("\r\n");
 
-    Serial.println();
-    Serial.println("SERVER RESPONSE:");
-    Serial.println(response);
+  client.print("Connection: close\r\n\r\n");
 
-    https.end();
+  const size_t CHUNK_SIZE = 1024;
 
-    if (httpCode >= 200 && httpCode < 300) {
-      return true;
+  size_t total = csvData.length();
+  size_t sent = 0;
+
+  while (sent < total) {
+    size_t remaining = total - sent;
+
+    size_t chunk = remaining > CHUNK_SIZE ? CHUNK_SIZE : remaining;
+
+    size_t written =
+        client.write((const uint8_t *)csvData.c_str() + sent, chunk);
+
+    if (written != chunk) {
+      Serial.println("ERROR: CSV upload failed");
+
+      client.stop();
+      return false;
     }
-  } else {
-    Serial.print("HTTP error: ");
-    Serial.println(https.errorToString(httpCode));
+
+    sent += written;
+
+    if (sent % 10240 < CHUNK_SIZE || sent == total) {
+      Serial.print("Uploaded: ");
+      Serial.print(sent);
+      Serial.print("/");
+      Serial.println(total);
+    }
+
+    delay(2);
   }
 
-  https.end();
+  Serial.println("CSV upload complete.");
+
+  unsigned long timeout = millis();
+
+  while (!client.available()) {
+    if (millis() - timeout > 30000) {
+      Serial.println("SERVER RESPONSE TIMEOUT");
+
+      client.stop();
+      return false;
+    }
+
+    delay(10);
+  }
+
+  String statusLine = client.readStringUntil('\n');
+
+  statusLine.trim();
+
+  Serial.print("HTTP STATUS: ");
+  Serial.println(statusLine);
+
+  while (client.connected()) {
+    String line = client.readStringUntil('\n');
+
+    if (line == "\r" || line.length() == 0) {
+      break;
+    }
+  }
+
+  String response = "";
+
+  while (client.available()) {
+    response += client.readString();
+  }
+
+  Serial.println();
+  Serial.println("SERVER RESPONSE:");
+  Serial.println(response);
+
+  client.stop();
+
+  if (statusLine.indexOf("200") >= 0 || statusLine.indexOf("201") >= 0 ||
+      statusLine.indexOf("202") >= 0) {
+    Serial.println();
+    Serial.println("PPG DATA SENT SUCCESSFULLY");
+
+    return true;
+  }
+
+  Serial.println("SERVER REJECTED DATA");
 
   return false;
 }
 
 // =====================================================
-// ACQUIRE 1600 SAMPLES
+// SENSOR POWER MANAGEMENT (STANDBY / ACTIVE)
+// =====================================================
+
+void turnOffMAX30102() {
+  max30102.setPulseAmplitudeRed(0);
+  max30102.setPulseAmplitudeIR(0);
+  max30102.setPulseAmplitudeGreen(0);
+  max30102.shutDown();
+}
+
+void turnOnMAX30102() {
+  max30102.wakeUp();
+  // 200 Hz with sampleAverage = 1 (true 200 Hz output)
+  max30102.setup(60, 1, 2, 200, 411, 4096);
+  max30102.setPulseAmplitudeGreen(0);
+  max30102.clearFIFO();
+}
+
+void turnOffMAX30100() {
+  max30100Write(MAX30100_LED_CONFIG, 0x00);
+  max30100Write(MAX30100_MODE_CONFIG, 0x80); // SHDN = 1
+}
+
+void turnOnMAX30100() {
+  max30100Write(MAX30100_MODE_CONFIG, 0x03);
+  max30100Write(MAX30100_SPO2_CONFIG, 0x6E);
+  max30100Write(MAX30100_LED_CONFIG, 0x88);
+  max30100Write(MAX30100_FIFO_WR_PTR, 0x00);
+  max30100Write(MAX30100_FIFO_OVF_CTR, 0x00);
+  max30100Write(MAX30100_FIFO_RD_PTR, 0x00);
+}
+
+void setSensorsPower(bool enable) {
+  if (enable) {
+    turnOnMAX30102();
+    turnOnMAX30100();
+    delay(50);
+  } else {
+    turnOffMAX30102();
+    turnOffMAX30100();
+  }
+}
+
+// =====================================================
+// COMMAND & TRIGGER CHECKS
+// =====================================================
+
+bool checkSerialStart() {
+  while (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    cmd.toUpperCase();
+    if (cmd.startsWith("START") || cmd == "S" || cmd == "REC") {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool checkSerialStop() {
+  while (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    cmd.toUpperCase();
+    if (cmd.startsWith("STOP") || cmd == "Q") {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool checkServerStart() {
+  if (WiFi.status() != WL_CONNECTED) {
+    return false;
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  client.setTimeout(2000);
+
+  if (!client.connect("pvd-ppg-dashboard.onrender.com", 443)) {
+    return false;
+  }
+
+  client.print("GET /api/recording/status HTTP/1.1\r\n"
+               "Host: pvd-ppg-dashboard.onrender.com\r\n"
+               "Connection: close\r\n\r\n");
+
+  unsigned long start = millis();
+  while (!client.available() && millis() - start < 2000) {
+    delay(10);
+  }
+
+  String response = "";
+  while (client.available()) {
+    response += client.readString();
+  }
+  client.stop();
+
+  if (response.indexOf("\"recording\":true") >= 0 ||
+      response.indexOf("\"recording\": true") >= 0) {
+    return true;
+  }
+
+  return false;
+}
+
+// =====================================================
+// ACQUIRE 1600 SAMPLES (ON DEMAND ONLY)
 // =====================================================
 
 bool acquirePPGWindow() {
+  // Power sensors ON
+  setSensorsPower(true);
+
   csvData = "";
 
-  // Reserve memory to reduce fragmentation
-  csvData.reserve(70000);
+  // Reserve enough memory
+  csvData.reserve(130000);
 
-  // CSV header
-  csvData = "SAMPLE,TIME_US,IR,RED,AX,AY,AZ,GX,GY,GZ\n";
+  csvData = "SAMPLE,TIME_US,"
+            "FINGER_IR,FINGER_RED,"
+            "TOE_IR,TOE_RED,"
+            "AX,AY,AZ,GX,GY,GZ\n";
 
   int sampleCount = 0;
 
+  uint16_t lastToeIR = 0;
+  uint16_t lastToeRED = 0;
+
   Serial.println();
   Serial.println("==========================================");
-  Serial.println("COLLECTING 8-SECOND PPG WINDOW");
+  Serial.println("SENSORS ON -> COLLECTING 1600 SAMPLES");
+  Serial.println("8 SECOND WINDOW");
   Serial.println("==========================================");
 
+  unsigned long startTime = millis();
+
   while (sampleCount < TOTAL_SAMPLES) {
+    if (checkSerialStop()) {
+      Serial.println("ACQUISITION CANCELLED BY USER");
+      setSensorsPower(false);
+      return false;
+    }
+
+    // Update toe sensor FIFO
+    uint16_t toeIR;
+    uint16_t toeRED;
+
+    if (readMAX30100(toeIR, toeRED)) {
+      lastToeIR = toeIR;
+      lastToeRED = toeRED;
+    }
+
+    // Update finger sensor
     max30102.check();
 
     while (max30102.available() && sampleCount < TOTAL_SAMPLES) {
-      uint32_t irValue = max30102.getFIFOIR();
-
-      uint32_t redValue = max30102.getFIFORed();
+      uint32_t fingerIR = max30102.getFIFOIR();
+      uint32_t fingerRED = max30102.getFIFORed();
 
       float ax, ay, az;
       float gx, gy, gz;
 
       bool motionOK = readMPU6500(ax, ay, az, gx, gy, gz);
 
-      if (motionOK) {
-        uint32_t timestamp = micros();
-
-        // Add CSV row
-        csvData += String(sampleCount);
-        csvData += ",";
-
-        csvData += String(timestamp);
-        csvData += ",";
-
-        csvData += String(irValue);
-        csvData += ",";
-
-        csvData += String(redValue);
-        csvData += ",";
-
-        csvData += String(ax, 4);
-        csvData += ",";
-
-        csvData += String(ay, 4);
-        csvData += ",";
-
-        csvData += String(az, 4);
-        csvData += ",";
-
-        csvData += String(gx, 2);
-        csvData += ",";
-
-        csvData += String(gy, 2);
-        csvData += ",";
-
-        csvData += String(gz, 2);
-        csvData += "\n";
-
-        sampleCount++;
-
-        // Stream real-time Finger PPG + Gyro (gx,gy,gz) for Web Serial and BLE
-        streamTelemetry(millis(), irValue, gx, gy, gz);
-
-        // Progress
-        if (sampleCount % 200 == 0) {
-          Serial.printf("# Samples: %d/%d\n", sampleCount, TOTAL_SAMPLES);
-        }
+      if (!motionOK) {
+        ax = ay = az = 0;
+        gx = gy = gz = 0;
       }
 
+      uint32_t timestamp = micros();
+
+      char row[128];
+      snprintf(row, sizeof(row),
+               "%d,%lu,%lu,%lu,%u,%u,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
+               sampleCount, (unsigned long)timestamp, (unsigned long)fingerIR,
+               (unsigned long)fingerRED, (unsigned)lastToeIR,
+               (unsigned)lastToeRED, ax, ay, az, gx, gy, gz);
+
+      csvData += row;
+
+      // Stream live telemetry for Web Serial chart
+      // (DATA,ts_ms,finger,toe,gx,gy,gz)
+      Serial.printf("DATA,%lu,%lu,%lu,%.1f,%.1f,%.1f\n",
+                    (unsigned long)(timestamp / 1000), (unsigned long)fingerIR,
+                    (unsigned long)lastToeIR, gx, gy, gz);
+
+      sampleCount++;
+
       max30102.nextSample();
+
+      if (sampleCount % 100 == 0) {
+        Serial.print("Samples: ");
+        Serial.print(sampleCount);
+        Serial.println("/1600");
+      }
     }
 
-    delay(1);
+    // Safety timeout (20 seconds for an 8-second window)
+    if (millis() - startTime > 20000) {
+      Serial.println("ERROR: Acquisition timeout");
+      setSensorsPower(false);
+      return false;
+    }
+
+    if (!max30102.available()) {
+      delay(1);
+    }
   }
 
+  // Acquisition finished: turn sensors OFF immediately!
+  setSensorsPower(false);
+
   Serial.println();
-  Serial.println("PPG WINDOW COMPLETE.");
+  Serial.println("1600 SAMPLES COMPLETED -> SENSORS TURNED OFF");
 
-  Serial.print("Final samples: ");
-  Serial.println(sampleCount);
-
-  Serial.print("CSV size: ");
+  Serial.print("CSV SIZE: ");
   Serial.print(csvData.length());
   Serial.println(" bytes");
 
@@ -463,97 +697,121 @@ void setup() {
 
   delay(2000);
 
-  Wire.begin(SDA_PIN, SCL_PIN);
-  Wire.setClock(400000);
-
   Serial.println();
   Serial.println("==========================================");
-  Serial.println("      PVD PPG SMART PATCH");
+  Serial.println("PVD PPG SMART PATCH");
+  Serial.println("ESP32-S3");
   Serial.println("==========================================");
 
-  // -----------------------------------------
+  // -------------------------------------------------
+  // MAIN I2C BUS
+  // MAX30102 + MPU6500
+  // -------------------------------------------------
+
+  Wire.begin(SDA_PIN, SCL_PIN, 400000);
+  delay(100);
+
+  // -------------------------------------------------
   // MAX30102
-  // -----------------------------------------
+  // -------------------------------------------------
+
+  Serial.println("Initializing MAX30102...");
 
   if (!max30102.begin(Wire, I2C_SPEED_FAST)) {
-    Serial.println("ERROR: MAX30102 NOT FOUND!");
-
+    Serial.println("MAX30102 FAILED");
     while (1)
       delay(1000);
   }
-
-  Serial.println("MAX30102: OK");
 
   max30102.setup(60, 1, 2, 200, 411, 4096);
+  max30102.setPulseAmplitudeGreen(0);
+  Serial.println("MAX30102 INITIALIZED");
 
-  max30102.setPulseAmplitudeRed(0x24);
-  max30102.setPulseAmplitudeIR(0x24);
-
-  // -----------------------------------------
+  // -------------------------------------------------
   // MPU6500
-  // -----------------------------------------
+  // -------------------------------------------------
 
   if (!initMPU6500()) {
-    Serial.println("ERROR: MPU6500 NOT FOUND!");
+    Serial.println("MPU6500 FAILED");
+    while (1)
+      delay(1000);
+  }
+  Serial.println("MPU6500 INITIALIZED");
 
+  // -------------------------------------------------
+  // MAX30100
+  // -------------------------------------------------
+
+  if (!initMAX30100()) {
+    Serial.println("MAX30100 FAILED");
     while (1)
       delay(1000);
   }
 
-  Serial.println("MPU6500: OK");
+  // -------------------------------------------------
+  // WIFI
+  // -------------------------------------------------
 
-  // -----------------------------------------
-  // BLE (Bluetooth Low Energy)
-  // -----------------------------------------
-  initBLE();
-
-  // -----------------------------------------
-  // WIFI (Optional Cloud Upload)
-  // -----------------------------------------
   connectWiFi();
 
+  // -------------------------------------------------
+  // SENSORS OFF BY DEFAULT (STANDBY)
+  // -------------------------------------------------
+  setSensorsPower(false);
+
   Serial.println();
-  Serial.println("SYSTEM READY (USB Serial + BLE Active)");
+  Serial.println("==========================================");
+  Serial.println("ALL SENSORS READY & CURRENTLY OFF");
+  Serial.println("Sensors will turn ON only when 'Start Rec' is clicked!");
+  Serial.println("==========================================");
 }
 
 // =====================================================
-// LOOP
+// LOOP (STANDBY & TRIGGER LISTENER)
 // =====================================================
 
 void loop() {
-  // Re-start advertising when client disconnects
-  if (!deviceConnected && oldDeviceConnected) {
-    delay(500);
-    pServer->startAdvertising();
-    Serial.println("[BLE] Restarted advertising");
-    oldDeviceConnected = deviceConnected;
-  }
-  if (deviceConnected && !oldDeviceConnected) {
-    oldDeviceConnected = deviceConnected;
+  if (WiFi.status() != WL_CONNECTED) {
+    connectWiFi();
   }
 
-  max30102.check();
+  bool startTriggered = false;
 
-  static int mpuSkip = 0;
-  static float ax = 0, ay = 0, az = 0;
-  static float gx = 0, gy = 0, gz = 0;
+  // 1. Check Serial command (Web Serial or USB Monitor)
+  if (checkSerialStart()) {
+    Serial.println("\n[TRIGGER] Start command received via Serial!");
+    startTriggered = true;
+  }
 
-  while (max30102.available()) {
-    uint32_t irValue = max30102.getFIFOIR();
-    uint32_t redValue = max30102.getFIFORed();
+  // 2. Check Cloud Server status (polling every 1.5s when idle)
+  static unsigned long lastPoll = 0;
+  if (!startTriggered && millis() - lastPoll > 1500) {
+    lastPoll = millis();
+    if (checkServerStart()) {
+      Serial.println("\n[TRIGGER] 'Start Rec' clicked on Web Dashboard!");
+      startTriggered = true;
+    }
+  }
 
-    // Sample MPU6500 every 5th sample (40 Hz) to avoid I2C bus congestion
-    if (++mpuSkip >= 5) {
-      mpuSkip = 0;
-      readMPU6500(ax, ay, az, gx, gy, gz);
+  if (startTriggered) {
+    bool acquired = acquirePPGWindow();
+
+    if (acquired) {
+      bool uploaded = sendDataToDashboard();
+      if (uploaded) {
+        Serial.println("CYCLE COMPLETE");
+      } else {
+        Serial.println("UPLOAD FAILED");
+      }
+    } else {
+      Serial.println("ACQUISITION ABORTED / FAILED");
     }
 
-    // Stream real-time Finger PPG + Gyro (gx,gy,gz) over both Serial and BLE
-    streamTelemetry(millis(), irValue, gx, gy, gz);
-
-    max30102.nextSample();
+    // Ensure sensors stay OFF in standby
+    setSensorsPower(false);
+    Serial.println(
+        "\n[STANDBY] Sensors are OFF. Waiting for next 'Start Rec'...");
   }
 
-  flushBleStream();
-  delay(1);
+  delay(50);
 }
