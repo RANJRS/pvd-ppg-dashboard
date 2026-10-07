@@ -1812,7 +1812,22 @@ async function sendDeviceCommand(cmd) {
     if (esp32BleRxChar) {
         try {
             const encoder = new TextEncoder();
-            await esp32BleRxChar.writeValue(encoder.encode(cmd + "\n"));
+            const data = encoder.encode(cmd + "\n");
+            if (typeof esp32BleRxChar.writeValueWithResponse === "function") {
+                try {
+                    await esp32BleRxChar.writeValueWithResponse(data);
+                } catch (wrErr) {
+                    if (typeof esp32BleRxChar.writeValueWithoutResponse === "function") {
+                        await esp32BleRxChar.writeValueWithoutResponse(data);
+                    } else if (typeof esp32BleRxChar.writeValue === "function") {
+                        await esp32BleRxChar.writeValue(data);
+                    }
+                }
+            } else if (typeof esp32BleRxChar.writeValueWithoutResponse === "function") {
+                await esp32BleRxChar.writeValueWithoutResponse(data);
+            } else if (typeof esp32BleRxChar.writeValue === "function") {
+                await esp32BleRxChar.writeValue(data);
+            }
             console.log(`[ESP32] Sent BLE command: ${cmd}`);
         } catch (e) {
             console.warn("[ESP32] BLE command error:", e);
@@ -1922,8 +1937,8 @@ async function stopRecording() {
 
     console.log(`[ESP32] Recording stopped. Captured ${n} samples spanning ${durationS.toFixed(1)}s.`);
     
-    // Support both 200 Hz USB Serial (3000 samples) and 100 Hz Bluetooth BLE (1500 samples)
-    if (durationS < 7.5 && n < 800) {
+    // Support both 200 Hz USB Serial (3000 samples) and 100 Hz Bluetooth BLE (~1450 samples)
+    if (durationS < 7.0 && n < 600) {
         alert(`Recording is too short (${durationS.toFixed(1)}s, ${n} samples). Please record at least 8 seconds of data to run the MLP classifier.`);
         return;
     }

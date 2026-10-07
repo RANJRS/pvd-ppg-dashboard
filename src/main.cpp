@@ -213,7 +213,7 @@ bool initMAX30100() {
   // bits 1:0 = 10  -> 800 us
   // bit 6     = 1   -> high resolution
   //
-  max30100Write(MAX30100_SPO2_CONFIG, 0x6E);
+  max30100Write(MAX30100_SPO2_CONFIG, 0x4E);
 
   // IR = 27.1 mA
   // RED = 27.1 mA
@@ -565,7 +565,7 @@ void turnOffMAX30100() {
 
 void turnOnMAX30100() {
   max30100Write(MAX30100_MODE_CONFIG, 0x03);
-  max30100Write(MAX30100_SPO2_CONFIG, 0x6E);
+  max30100Write(MAX30100_SPO2_CONFIG, 0x4E);
   max30100Write(MAX30100_LED_CONFIG, 0x88);
   max30100Write(MAX30100_FIFO_WR_PTR, 0x00);
   max30100Write(MAX30100_FIFO_OVF_CTR, 0x00);

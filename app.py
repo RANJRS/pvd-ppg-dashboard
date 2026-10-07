@@ -550,9 +550,9 @@ def predict():
     if df.empty or len(df) < 100:
         return jsonify({"error": "Insufficient data in recording"}), 400
 
-    # Check duration (minimum 7.5 seconds)
+    # Check duration (minimum ~7 seconds)
     duration_ms = float(df["timestamp_ms"].iloc[-1] - df["timestamp_ms"].iloc[0]) if len(df) > 1 else 0.0
-    if duration_ms < 7500 and len(df) < 1500:
+    if duration_ms < 6500 and len(df) < 600:
         return jsonify({"error": f"Recording is too short ({duration_ms/1000.0:.1f}s). Need at least 8 seconds of data."}), 400
 
     # Resample to standard 200 Hz (5ms grid) if data arrived at ~100 Hz (Bluetooth BLE)
